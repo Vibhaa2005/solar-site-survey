@@ -177,6 +177,9 @@ table.cmp, table.scen { font-size: 15px; }
 .facts dt { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; }
 .facts dt svg { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .facts dd { margin: 0; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+.card-sec { display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
+.headline .ang { color: var(--s-angle); }
+.headline .shd { color: var(--s-shade); }
 .headline { margin: 0; font-family: var(--font-display); font-size: 21px; font-weight: 600; line-height: 1.25; text-wrap: balance; }
 .sub { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
 .insight { font: 600 12px/1.4 var(--font-mono); color: var(--fg); background: var(--surface-2); padding: 2px 8px; border-radius: 4px; }
@@ -498,6 +501,21 @@ nav.tabs {
         </div>
       </div>
       <p class="headline" id="headline"></p>
+      <div class="card-sec">
+        <span class="label">Where the year's energy goes</span>
+        <div class="waterfall" role="img" id="wfBar" aria-label="Breakdown of losses">
+          <div class="wf-net" id="wfNet"></div><div class="wf-or" id="wfOr"></div><div class="wf-sh" id="wfSh"></div>
+        </div>
+        <div class="legend">
+          <span><i class="sw" style="background:var(--s-prod)"></i>Produced <b class="mono" id="lgNet"></b></span>
+          <span><i class="sw" style="background:var(--s-angle)"></i>Lost to angle <b class="mono" id="lgOr"></b></span>
+          <span><i class="sw" style="background:var(--s-shade)"></i>Lost to shade <b class="mono" id="lgSh"></b></span>
+        </div>
+      </div>
+      <div class="card-sec">
+        <span class="label">What to do, biggest gain first</span>
+        <div class="actions" id="recs"></div>
+      </div>
     </div>
 
     <div class="panel map-wrap">
@@ -531,23 +549,6 @@ nav.tabs {
         <span><svg width="18" height="10" aria-hidden="true"><path d="M0 5h18" stroke="currentColor" stroke-width="2" stroke-dasharray="4 3"/></svg>Best possible</span>
       </div>
       <dl class="facts" id="dayFacts"></dl>
-    </div>
-
-    <div class="panel map-wrap">
-      <h3>Where the year's energy goes</h3>
-      <div class="waterfall" role="img" id="wfBar" aria-label="Breakdown of losses">
-        <div class="wf-net" id="wfNet"></div><div class="wf-or" id="wfOr"></div><div class="wf-sh" id="wfSh"></div>
-      </div>
-      <div class="legend">
-        <span><i class="sw" style="background:var(--s-prod)"></i>Produced <b class="mono" id="lgNet"></b></span>
-        <span><i class="sw" style="background:var(--s-angle)"></i>Lost to angle <b class="mono" id="lgOr"></b></span>
-        <span><i class="sw" style="background:var(--s-shade)"></i>Lost to shade <b class="mono" id="lgSh"></b></span>
-      </div>
-    </div>
-
-    <div class="panel" style="display:grid;gap:10px">
-      <h3>What to do, biggest gain first</h3>
-      <div class="actions" id="recs"></div>
     </div>
 
     <div class="panel" style="display:grid;gap:8px">
@@ -1316,7 +1317,8 @@ const rsL = v => Math.abs(v) >= 1e5 ? `₹${fmt(v / 1e5, 2)} L` : rs(v);
 function updateReport() {
   const r = R, p = r.panel, sc = scenarios(r);
   const pct = v => fmt(v * 100, 1) + "%";
-  const net = p ? r.net : 0, orL = p ? 1 - r.orientYield : 0, shL = p ? r.orientYield - r.net : 0;
+  // losses split the same way as the action cards: angle = gain from re-angling at this spot, shade = the rest
+  const net = p ? r.net : 0, orL = p ? (sc.fixAngle - sc.now) / sc.ideal : 0, shL = p ? (sc.ideal - sc.fixAngle) / sc.ideal : 0;
   const cov = S.recorded.reduce((a, b) => a + b, 0) * BIN, f = shadeFacts(r);
 
   // verdict + headline
@@ -1329,14 +1331,12 @@ function updateReport() {
     $("netBig").className = "big state-" + lvl; $("netBig").innerHTML = `${fmt(net * 100, 1)}<small>%</small>`;
     $("netNote").textContent = `${fmt(r.eNet, 0)} kWh per year`;
     setPill($("netChip"), lvl, lvl === "good" ? "✓ Good site" : lvl === "warn" ? "! Fair site" : "✕ Poor site");
-    const gA = sc.fixAngle - sc.now, gS = sc.ideal - sc.fixAngle, total = gA + gS;
-    if (total / sc.ideal < 0.03) $("headline").innerHTML = `This site is close to ideal. Fixing it would add only <span class="state-good">${rs(total * S.tariff * LIFE_YEARS)}</span> over 25 years.`;
-    else {
-      const parts = [];
-      if (gA / sc.ideal >= 0.01) parts.push("Re-angling the panel");
-      if (gS / sc.ideal >= 0.01) parts.push(`${parts.length ? "clearing" : "Clearing"} the shade from the ${f.card}`);
-      $("headline").innerHTML = `${parts.join(" and ")} would earn <span class="state-good">${rs(total * S.tariff * LIFE_YEARS)} more</span> over the panel's 25-year life.`;
-    }
+    const gA = sc.fixAngle - sc.now, gS = sc.ideal - sc.fixAngle, total = gA + gS, t = S.tariff;
+    const causes = [[gS, `<span class="shd">${rs(gS * t)} to shade from the ${f.card}</span>`], [gA, `<span class="ang">${rs(gA * t)} to the panel angle</span>`]]
+      .filter(c => c[0] * t >= 1).sort((a, b) => b[0] - a[0]).map(c => c[1]);
+    $("headline").innerHTML = total / sc.ideal < 0.03
+      ? `Losing only ${fmt(total, 0)} kWh (${rs(total * t)}) a year, ${pct(total / sc.ideal)} of the best possible. No fix needed.`
+      : `Losing ${fmt(total, 0)} kWh (${rs(total * t)}) a year: ${causes.join(" and ")}. That is ${rsL(total * t * LIFE_YEARS)} over 25 years.`;
   }
 
   // now vs after table
