@@ -100,6 +100,17 @@ h3 { font-family: var(--font-display); font-weight: 600; font-size: 18px; margin
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
 .panel.flush { padding: 0; overflow: hidden; }
 
+/* Step intro and result boxes */
+.intro { display: grid; gap: 6px; }
+.step { font: 600 12px/1.3 var(--font-mono); text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); }
+.how { margin: 6px 0 0; padding-left: 22px; display: grid; gap: 4px; max-width: 62ch; }
+.how li::marker { font-family: var(--font-mono); font-weight: 600; color: var(--accent); }
+.verdict { display: grid; gap: 12px; border-width: 2px; border-color: var(--fg); }
+.sentence { margin: 0; font-size: 16px; line-height: 1.55; max-width: 62ch; }
+.sentence b { font-weight: 600; }
+.hint { color: var(--muted); font-size: 13px; line-height: 1.4; }
+.scale { grid-column: 1 / -1; display: flex; justify-content: space-between; gap: 8px; font: 11px/1.3 var(--font-mono); color: var(--muted); }
+
 /* Start banner */
 .start { display: grid; gap: 10px; border-color: var(--accent); background: var(--accent-soft); }
 .start p { margin: 0; }
@@ -256,9 +267,15 @@ nav.tabs {
 <main>
   <!-- ALIGN -->
   <section class="view" id="view-align" data-view="align">
-    <div>
-      <h2>Panel alignment</h2>
-      <p class="lede">Lay the phone flat on the panel, screen up. The app reads the panel's tilt and the direction it faces, then compares them with the best orientation for your location.</p>
+    <div class="intro">
+      <span class="step">Step 1 of 3 · Angle</span>
+      <h2>Is the panel angled correctly?</h2>
+      <p class="lede">A solar panel collects the most sunlight at one particular steepness (tilt) and compass direction, and the right values depend on where you are. This step measures your panel's angle and tells you how far off it is.</p>
+      <ol class="how">
+        <li>Tap <b>Start sensors</b> and allow motion and location access.</li>
+        <li>Lay the phone flat on the panel, screen facing up.</li>
+        <li>Read the result below. Adjust the panel until it says <b>On target</b>, or tap <b>Freeze reading</b> to keep the measurement.</li>
+      </ol>
     </div>
 
     <div class="panel start" id="startAlign">
@@ -268,26 +285,32 @@ nav.tabs {
       </div>
     </div>
 
-    <div class="panel">
+    <div class="panel verdict">
+      <div class="row" style="justify-content:space-between">
+        <span class="label">Result: angle score</span>
+        <span class="pill good" id="onTarget" hidden>On target</span>
+      </div>
       <div class="hero">
         <div class="big" id="yieldBig">–<small>%</small></div>
         <div class="hero-side">
-          <span class="label">of the best possible yield</span>
           <strong id="yieldNote">Waiting for a reading</strong>
-          <span class="mono" id="yieldLoss" style="color:var(--muted);font-size:13px"></span>
+          <span class="hint">of the energy the panel would collect at the best angle</span>
         </div>
       </div>
+      <p class="sentence" id="alignSentence">No reading yet. Start the sensors and lay the phone flat on the panel.</p>
     </div>
 
     <div class="panel meas">
+      <h3>Your panel compared with the best angle</h3>
       <div class="meas-row">
-        <div><div class="label">Tilt from horizontal</div><div class="val" id="tiltVal">–<small>°</small></div></div>
+        <div><div class="label">Tilt (steepness)</div><div class="val" id="tiltVal">–<small>°</small></div></div>
         <div class="target" id="tiltTarget">best –°</div>
         <div class="bar" id="tiltBar"><div class="tol" id="tiltTol"></div><div class="tgt" id="tiltTgt"></div><div class="cur" id="tiltCur"></div></div>
+        <div class="scale"><span>0° flat</span><span>dot = your panel · line = best</span><span>60°</span></div>
         <div class="advice" id="tiltAdvice"></div>
       </div>
       <div class="meas-row">
-        <div><div class="label">Panel faces</div><div class="val" id="azVal">–<small>°</small></div></div>
+        <div><div class="label">Compass direction the panel faces</div><div class="val" id="azVal">–<small>°</small></div></div>
         <div class="target" id="azTarget">best –°</div>
         <div class="advice" id="azAdvice"></div>
       </div>
@@ -297,20 +320,18 @@ nav.tabs {
     </div>
 
     <div class="panel map-wrap">
-      <div class="row" style="justify-content:space-between">
-        <h3>Yield map</h3>
-        <span class="pill good" id="onTarget" hidden>On target</span>
-      </div>
-      <p class="lede" style="margin:0">Each point is one way the panel could face. Distance from the centre is the tilt, and the angle is the compass direction. Move the orange dot into the darkest band.</p>
+      <h3>Map: which angle collects the most energy?</h3>
+      <p class="lede" style="margin:0">Every point on this circle is one possible way to mount the panel. <b>The centre</b> means lying flat, and points further out are steeper (rings at 15°, 30°, 45°, 60°). <b>The direction from the centre</b> is the compass direction the panel faces. <b>Darker colour</b> means more energy per year. The <b>orange dot</b> is your panel and the <b>crosshair</b> is the best angle. Move the panel until the dot reaches the crosshair.</p>
       <canvas id="polar" aria-label="Map of annual yield by panel tilt and direction, with the current orientation marked"></canvas>
       <div class="legend" id="polarLegend"></div>
     </div>
 
     <div class="panel map-wrap">
       <div class="row" style="justify-content:space-between">
-        <h3>Live sensor data</h3>
+        <h3>Raw sensor readings</h3>
         <span class="mono" style="font-size:12px;color:var(--muted)" id="rateText"></span>
       </div>
+      <p class="lede" style="margin:0">The live measurements the results above are calculated from. The graph shows the measured tilt over the last 20 seconds. The dashed line is the best tilt.</p>
       <canvas id="spark" aria-label="Measured tilt over the last 20 seconds"></canvas>
       <table><tbody>
         <tr><td>Accelerometer gravity vector x, y, z</td><td id="rawAcc">–</td></tr>
@@ -324,9 +345,16 @@ nav.tabs {
 
   <!-- SHADE -->
   <section class="view" id="view-shade" data-view="shade" hidden>
-    <div>
-      <h2>Shading survey</h2>
-      <p class="lede">Stand where the panel will go. Tap <b>Trace skyline</b>, then turn slowly in a full circle, keeping the crosshair on the top edge of buildings, trees and tanks. Aim at the horizon where the sky is open.</p>
+    <div class="intro">
+      <span class="step">Step 2 of 3 · Shade</span>
+      <h2>Does anything block the sun?</h2>
+      <p class="lede">Buildings, trees and water tanks cast shadows on a panel at certain times of the day and year. This step records the outline of everything around you, then checks it against the sun's path for every day of the year.</p>
+      <ol class="how">
+        <li>Stand where the panel is, or where it will go.</li>
+        <li>Tap <b>Camera on</b>, then <b>Trace skyline</b>.</li>
+        <li>Turn slowly in a full circle. Keep the crosshair on the top edge of buildings and trees, or on the horizon where the sky is open.</li>
+        <li>Tap <b>Stop tracing</b> when the bar reaches 360°.</li>
+      </ol>
     </div>
 
     <div class="finder" id="finder">
@@ -336,7 +364,7 @@ nav.tabs {
       <div class="rec-tag" id="recTag" hidden>● TRACING</div>
       <div class="hud">
         <div><div class="label">Pointing</div><div class="big" id="ptAz">–°</div></div>
-        <div style="text-align:right"><div class="label">Elevation</div><div class="big" id="ptEl">–°</div></div>
+        <div style="text-align:right"><div class="label">Height above horizon</div><div class="big" id="ptEl">–°</div></div>
       </div>
     </div>
 
@@ -345,75 +373,89 @@ nav.tabs {
       <button class="btn" id="btnCam" type="button">Camera on</button>
     </div>
     <div class="cover">
-      <div class="row" style="justify-content:space-between"><span class="label">Skyline measured</span><span class="mono" id="coverText" style="font-size:13px">0° of 360°</span></div>
+      <div class="row" style="justify-content:space-between"><span class="label">Skyline traced so far</span><span class="mono" id="coverText" style="font-size:13px">0° of 360°</span></div>
       <div class="cover-bar"><i id="coverFill"></i></div>
+    </div>
+
+    <div class="panel verdict">
+      <span class="label">Result: energy lost to shade</span>
+      <div class="hero">
+        <div class="big" id="shLoss">–<small>%</small></div>
+        <div class="hero-side">
+          <strong id="shNote">–</strong>
+          <span class="hint">of the panel's yearly energy is blocked by obstacles</span>
+        </div>
+      </div>
+      <p class="sentence" id="shadeSentence"></p>
+      <div class="stats">
+        <div class="stat"><span class="label">Direct sun per day, open sky</span><span class="v" id="shOpen">–</span></div>
+        <div class="stat"><span class="label">Direct sun per day, this spot</span><span class="v" id="shHere">–</span></div>
+      </div>
     </div>
 
     <div class="panel map-wrap">
       <div class="row" style="justify-content:space-between">
-        <h3>Sun-path diagram</h3>
+        <h3>Chart: when is the sun blocked?</h3>
         <span class="mono" style="font-size:12px;color:var(--muted)" id="spLat"></span>
       </div>
-      <p class="lede" style="margin:0">Curves show where the sun travels on the 21st of each month. The grey shape is your measured skyline. Wherever a curve passes behind it, the panel is in shade. Drag on the chart to sketch or correct the skyline by hand.</p>
+      <p class="lede" style="margin:0"><b>Left to right</b> is compass direction, and <b>bottom to top</b> is height above the horizon. Each curve is the sun's path across the sky on one day: the highest curve is June 21 and the lowest is December 21. <b>Grey</b> is your traced skyline. Where a curve turns <b>red</b>, the sun is behind an obstacle and the panel is in shade. Drag on the chart to fix the outline by hand.</p>
       <canvas id="sunpath" aria-label="Sun-path diagram with measured skyline"></canvas>
       <div class="legend">
-        <span><i class="sw" style="background:var(--accent)"></i>Sun in view</span>
-        <span><i class="sw" style="background:var(--bad)"></i>Sun blocked</span>
-        <span><i class="sw" style="background:var(--obstacle)"></i>Obstacles</span>
+        <span><i class="sw" style="background:var(--accent)"></i>Sun visible</span>
+        <span><i class="sw" style="background:var(--bad)"></i>Sun blocked (shade)</span>
+        <span><i class="sw" style="background:var(--obstacle)"></i>Your skyline</span>
+        <span><i class="sw" style="background:var(--warn)"></i>Not traced yet</span>
       </div>
       <div class="row">
         <button class="btn" id="btnClear" type="button">Clear skyline</button>
       </div>
     </div>
 
-    <div class="panel">
-      <div class="stats">
-        <div class="stat"><span class="label">Energy lost to shade</span><span class="v" id="shLoss">–</span></div>
-        <div class="stat"><span class="label">Direct sun, open sky</span><span class="v" id="shOpen">–</span></div>
-        <div class="stat"><span class="label">Direct sun, this spot</span><span class="v" id="shHere">–</span></div>
-      </div>
-    </div>
-
     <div class="panel map-wrap">
-      <h3>Direct sun by month</h3>
+      <h3>Chart: hours of direct sun each month</h3>
+      <p class="lede" style="margin:0">The <b>light bar</b> is what an open sky would give. The <b>orange bar</b> is what this spot actually gets. The <b>red number</b> is the % of that month's energy lost to shade.</p>
       <canvas id="monthly" aria-label="Hours of direct sun per day by month, open sky versus this spot"></canvas>
       <div class="legend">
-        <span><i class="sw" style="background:var(--surface-2)"></i>Open sky</span>
+        <span><i class="sw" style="background:color-mix(in srgb, var(--muted) 30%, transparent)"></i>Open sky</span>
         <span><i class="sw" style="background:var(--accent)"></i>This spot</span>
-        <span><b style="color:var(--bad)">n</b> = % of that month's energy lost to shade</span>
       </div>
     </div>
   </section>
 
   <!-- REPORT -->
   <section class="view" id="view-report" data-view="report" hidden>
-    <div>
-      <h2>Site report</h2>
-      <p class="lede">Alignment and shading combined into one estimate of what this panel will produce, compared with the ideal for your latitude.</p>
+    <div class="intro">
+      <span class="step">Step 3 of 3 · Result</span>
+      <h2>Final verdict: how good is this solar site?</h2>
+      <p class="lede">Combines Step 1 (angle) and Step 2 (shade) into one answer: how much electricity this panel will really produce, compared with a perfectly angled, unshaded panel at the same location.</p>
     </div>
-    <div class="panel" style="display:grid;gap:14px">
+
+    <div class="panel verdict">
+      <span class="label">Overall result</span>
       <div class="hero">
         <div class="big" id="netBig">–<small>%</small></div>
         <div class="hero-side">
-          <span class="label">of ideal output at this spot</span>
           <strong id="netNote"></strong>
+          <span class="hint">of the best possible output at this location</span>
         </div>
       </div>
+      <p class="sentence" id="netSentence"></p>
+      <span class="label">Where the energy goes</span>
       <div class="waterfall" role="img" id="wfBar" aria-label="Breakdown of losses">
         <div class="wf-net" id="wfNet"></div><div class="wf-or" id="wfOr"></div><div class="wf-sh" id="wfSh"></div>
       </div>
       <div class="legend">
-        <span><i class="sw" style="background:var(--good)"></i>Delivered <b class="mono" id="lgNet"></b></span>
-        <span><i class="sw" style="background:var(--warn)"></i>Alignment loss <b class="mono" id="lgOr"></b></span>
-        <span><i class="sw" style="background:var(--bad)"></i>Shading loss <b class="mono" id="lgSh"></b></span>
+        <span><i class="sw" style="background:var(--good)"></i>Produced <b class="mono" id="lgNet"></b></span>
+        <span><i class="sw" style="background:var(--warn)"></i>Lost to wrong angle <b class="mono" id="lgOr"></b></span>
+        <span><i class="sw" style="background:var(--bad)"></i>Lost to shade <b class="mono" id="lgSh"></b></span>
       </div>
     </div>
 
     <div class="panel">
       <div class="stats">
-        <div class="stat"><span class="label">Expected per year</span><span class="v" id="rpE">–</span></div>
+        <div class="stat"><span class="label">Electricity per year</span><span class="v" id="rpE">–</span></div>
         <div class="stat"><span class="label">Lost per year</span><span class="v state-bad" id="rpLost">–</span></div>
-        <div class="stat"><span class="label">Value lost per year</span><span class="v state-bad" id="rpRs">–</span></div>
+        <div class="stat"><span class="label">Money lost per year</span><span class="v state-bad" id="rpRs">–</span></div>
       </div>
     </div>
 
@@ -491,11 +533,11 @@ nav.tabs {
 <nav class="tabs" aria-label="Tools">
   <div class="tabs-in" role="tablist">
     <button class="tab" role="tab" data-tab="align" aria-selected="true" type="button">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 19h18"/><path d="M5 19l12-8"/><path d="M11 19a6 6 0 0 0-1-3.4"/><circle cx="18" cy="6" r="2.5"/></svg>Align</button>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 19h18"/><path d="M5 19l12-8"/><path d="M11 19a6 6 0 0 0-1-3.4"/><circle cx="18" cy="6" r="2.5"/></svg>1 · Angle</button>
     <button class="tab" role="tab" data-tab="shade" aria-selected="false" type="button">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20h20"/><path d="M4 20v-7h4v7M8 20V9h5v11"/><path d="M17 20v-4"/><circle cx="17" cy="12" r="3.5"/><path d="M3 9a9 9 0 0 1 18 0" stroke-dasharray="2 2.5"/></svg>Shade</button>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20h20"/><path d="M4 20v-7h4v7M8 20V9h5v11"/><path d="M17 20v-4"/><circle cx="17" cy="12" r="3.5"/><path d="M3 9a9 9 0 0 1 18 0" stroke-dasharray="2 2.5"/></svg>2 · Shade</button>
     <button class="tab" role="tab" data-tab="report" aria-selected="false" type="button">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 16v-3M12 16v-6M15 16v-4"/></svg>Report</button>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 16v-3M12 16v-6M15 16v-4"/></svg>3 · Result</button>
     <button class="tab" role="tab" data-tab="setup" aria-selected="false" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>Setup</button>
   </div>
@@ -909,9 +951,17 @@ function updateAlignText() {
   $("yieldBig").className = "big " + cls;
   $("yieldBig").innerHTML = `${fmt(y * 100, 1)}<small>%</small>`;
   const lostKwh = S.kwp * M.ideal * (1 - y) * S.pr * WEATHER;
-  $("yieldNote").textContent = y >= 0.97 ? "Well aligned" : y >= 0.9 ? "Could be better" : "Poorly aligned";
-  $("yieldLoss").textContent = `−${fmt((1 - y) * 100, 1)}% · ≈ ${fmt(lostKwh, 0)} kWh / ₹${fmt(lostKwh * S.tariff, 0)} lost per year`;
+  $("yieldNote").textContent = y >= 0.97 ? "Well angled" : y >= 0.9 ? "Slightly off" : "Badly angled";
   const on = Math.abs(dT) < 2 && (Math.abs(dA) < 5 || p.tilt < 4);
+  // plain-language conclusion
+  const fixes = [];
+  if (Math.abs(dT) >= 2) fixes.push(`<b>${dT > 0 ? "make it steeper" : "make it flatter"} by ${fmt(Math.abs(dT), 0)}°</b>`);
+  if (p.tilt >= 4 && Math.abs(dA) >= 5) fixes.push(`<b>turn it ${fmt(Math.abs(dA), 0)}° ${dA > 0 ? "clockwise" : "anticlockwise"}</b> so it faces ${cardinal(o.az)}`);
+  const facing = p.tilt < 2 ? "is lying almost flat" : `is tilted <b>${fmt(p.tilt, 0)}°</b> and faces <b>${cardinal(p.az)} (${fmt(p.az, 0)}°)</b>`;
+  $("alignSentence").innerHTML = `Your panel ${facing}. The best angle at your location is <b>${fmt(o.tilt, 0)}° facing ${cardinal(o.az)}</b>. ` +
+    (on || !fixes.length
+      ? `It is close enough to the best angle that no adjustment is needed.`
+      : `At its current angle it collects <b>${fmt(y * 100, 1)}%</b> of what it could, losing about <b>${fmt(lostKwh, 0)} kWh (₹${fmt(lostKwh * S.tariff, 0)}) a year</b>. To fix it, ${fixes.join(" and ")}.`);
   $("onTarget").hidden = !on;
   if (on && !LIVE.onTarget && !S.manual && navigator.vibrate) navigator.vibrate([60, 40, 60]);
   LIVE.onTarget = on;
@@ -1041,8 +1091,8 @@ function drawMonthly() {
   const gw = pw / 12, bw = Math.min(gw * 0.62, 30);
   for (let m = 0; m < 12; m++) {
     const x = L + m * gw + (gw - bw) / 2;
-    ctx.fillStyle = C.surface2; ctx.fillRect(x, Y(R.hOpen[m]), bw, T + ph - Y(R.hOpen[m]));
-    ctx.fillStyle = C.accent; ctx.fillRect(x + 3, Y(R.hHere[m]), bw - 6, T + ph - Y(R.hHere[m]));
+    ctx.fillStyle = C.muted; ctx.globalAlpha = 0.3; ctx.fillRect(x, Y(R.hOpen[m]), bw, T + ph - Y(R.hOpen[m]));
+    ctx.globalAlpha = 1; ctx.fillStyle = C.accent; ctx.fillRect(x + 3, Y(R.hHere[m]), bw - 6, T + ph - Y(R.hHere[m]));
     ctx.fillStyle = C.muted; ctx.textAlign = "center"; ctx.textBaseline = "top"; ctx.fillText(MONTHS[m][0], x + bw / 2, T + ph + 6);
     const loss = R.monthLoss[m];
     if (loss > 0.005) { ctx.fillStyle = C.bad; ctx.textBaseline = "bottom"; ctx.fillText(String(Math.round(loss * 100)), x + bw / 2, Y(R.hOpen[m]) - 3); }
@@ -1056,9 +1106,29 @@ function updateShadeText() {
   $("spLat").textContent = `${fmt(Math.abs(S.lat), 2)}°${S.lat >= 0 ? "N" : "S"} · solar time`;
   const yrOpen = R.hOpen.reduce((a, v, m) => a + v * M.samples.days[m], 0) / 365, yrHere = R.hHere.reduce((a, v, m) => a + v * M.samples.days[m], 0) / 365;
   const l = R.shadeLoss;
-  $("shLoss").innerHTML = `<span class="${l < 0.03 ? "state-good" : l < 0.1 ? "state-warn" : "state-bad"}">${fmt(l * 100, 1)}<small>%</small></span>`;
-  $("shOpen").innerHTML = `${fmt(yrOpen, 1)}<small> h/day</small>`;
-  $("shHere").innerHTML = `${fmt(yrHere, 1)}<small> h/day</small>`;
+  $("shLoss").className = "big " + (l < 0.03 ? "state-good" : l < 0.1 ? "state-warn" : "state-bad");
+  $("shLoss").innerHTML = `${fmt(l * 100, 1)}<small>%</small>`;
+  $("shNote").textContent = cov === 0 ? "Not traced yet" : l < 0.03 ? "Little shading" : l < 0.1 ? "Moderate shading" : "Heavy shading";
+  $("shOpen").innerHTML = `${fmt(yrOpen, 1)}<small> h</small>`;
+  $("shHere").innerHTML = `${fmt(yrHere, 1)}<small> h</small>`;
+  // plain-language conclusion
+  const f = shadeFacts(R);
+  let s;
+  if (cov === 0) s = `No skyline traced yet, so the app assumes a completely open sky (no shade). Follow the steps above to measure the obstacles around you.`;
+  else {
+    s = `Obstacles around this spot block <b>${fmt(l * 100, 1)}%</b> of the panel's yearly energy. On an average day the panel gets <b>${fmt(yrHere, 1)} hours</b> of direct sun instead of ${fmt(yrOpen, 1)} with an open sky. `;
+    if (l >= 0.01) s += `Most of the shade comes from the <b>${f.dir}</b>${f.worst.length ? `, and it is worst in <b>${f.worst.join(", ")}</b>` : ""}. `;
+    s += l < 0.03 ? `That is minor, so this is a good spot.` : l < 0.1 ? `That is noticeable. Trimming or avoiding the obstruction would help.` : `That is a large loss. Consider a different spot, or removing the obstruction.`;
+    if (cov < 360) s += ` <span class="hint">(Only ${cov}° of 360° traced so far, so the untraced directions are assumed open.)</span>`;
+  }
+  $("shadeSentence").innerHTML = s;
+}
+/* which direction causes the most lost sunlight, and the three worst months */
+function shadeFacts(r) {
+  let best = 0, bi = 0;
+  for (let b = 0; b < NBINS; b++) { const s = r.lostByBin[(b - 1 + NBINS) % NBINS] + r.lostByBin[b] + r.lostByBin[(b + 1) % NBINS]; if (s > best) { best = s; bi = b; } }
+  const worst = r.monthLoss.map((v, m) => [v, m]).sort((a, b) => b[0] - a[0]).slice(0, 3).filter(x => x[0] > 0.01).map(x => MONTHS[x[1]]);
+  return { dir: `${cardinal(bi * BIN)} (${bi * BIN}°)`, worst };
 }
 function updateShadeLive() {
   const p = LIVE.point;
@@ -1069,14 +1139,20 @@ function updateShadeLive() {
 function updateReport() {
   const r = R, p = r.panel;
   const pct = v => fmt(v * 100, 1) + "%";
+  const net = p ? r.net : 0, orL = p ? 1 - r.orientYield : 0, shL = p ? r.orientYield - r.net : 0;
   if (!p) {
-    $("netBig").innerHTML = `–<small>%</small>`; $("netNote").textContent = "Measure a panel on the Align tab first";
+    $("netBig").innerHTML = `–<small>%</small>`; $("netNote").textContent = "No panel measured yet";
+    $("netSentence").innerHTML = `Measure the panel's angle in <b>Step 1 (Angle)</b> and trace the skyline in <b>Step 2 (Shade)</b>. The final verdict appears here.`;
   } else {
     const cls = r.net >= 0.95 ? "state-good" : r.net >= 0.85 ? "state-warn" : "state-bad";
     $("netBig").className = "big " + cls; $("netBig").innerHTML = `${fmt(r.net * 100, 1)}<small>%</small>`;
-    $("netNote").textContent = r.net >= 0.95 ? "Good site, little to gain" : r.net >= 0.85 ? "Worth fixing" : "Large losses: act on the steps below";
+    $("netNote").textContent = r.net >= 0.95 ? "Good site" : r.net >= 0.85 ? "Fair site, worth fixing" : "Poor site";
+    const lostKwh = r.eIdeal - r.eNet, bigger = orL >= shL ? "the panel's angle" : "shading";
+    $("netSentence").innerHTML =
+      `This panel will produce about <b>${fmt(r.eNet, 0)} kWh of electricity a year</b>. A perfectly angled, unshaded ${fmt(S.kwp, 1)} kW panel here would produce ${fmt(r.eIdeal, 0)} kWh. ` +
+      `The difference of <b>${fmt(lostKwh, 0)} kWh (₹${fmt(lostKwh * S.tariff, 0)} a year)</b> comes from the wrong angle (${pct(orL)}) and shading (${pct(shL)}). ` +
+      (orL + shL < 0.03 ? `Both are small, so <b>this site is close to ideal</b>.` : `The bigger problem is <b>${bigger}</b>, so fix that first.`);
   }
-  const net = p ? r.net : 0, orL = p ? 1 - r.orientYield : 0, shL = p ? r.orientYield - r.net : 0;
   $("wfNet").style.width = net * 100 + "%"; $("wfOr").style.width = orL * 100 + "%"; $("wfSh").style.width = shL * 100 + "%";
   $("lgNet").textContent = p ? pct(net) : "–"; $("lgOr").textContent = p ? pct(orL) : "–"; $("lgSh").textContent = p ? pct(shL) : "–";
   $("wfBar").setAttribute("aria-label", p ? `Delivered ${pct(net)}, alignment loss ${pct(orL)}, shading loss ${pct(shL)}` : "No panel measured yet");
@@ -1087,25 +1163,22 @@ function updateReport() {
 
   // recommendations
   const recs = [];
-  if (!p) recs.push("Go to <b>Align</b> and place the phone flat on the panel to measure it.");
+  if (!p) recs.push("Go to <b>Step 1 (Angle)</b> and lay the phone flat on the panel to measure it.");
   else {
-    if (orL > 0.02) recs.push(`Re-angle the panel to <b>${fmt(M.opt.tilt, 0)}° tilt facing ${fmt(M.opt.az, 0)}° ${cardinal(M.opt.az)}</b>. That recovers about <b>${fmt(r.eIdeal - r.eOpen, 0)} kWh (₹${fmt((r.eIdeal - r.eOpen) * S.tariff, 0)})</b> a year.`);
-    else recs.push(`Alignment is within ${pct(orL)} of ideal. No change needed.`);
-    if (p.tilt < 8) recs.push("Below about 10° of tilt, rain does not wash dust off the glass. A small yield trade-off for 10–15° usually pays back in less cleaning.");
+    if (orL > 0.02) recs.push(`<b>Fix the angle:</b> set the panel to <b>${fmt(M.opt.tilt, 0)}° tilt, facing ${cardinal(M.opt.az)} (${fmt(M.opt.az, 0)}°)</b>. This recovers about <b>${fmt(r.eIdeal - r.eOpen, 0)} kWh (₹${fmt((r.eIdeal - r.eOpen) * S.tariff, 0)})</b> a year.`);
+    else recs.push(`<b>Angle:</b> within ${pct(orL)} of the best. No change needed.`);
+    if (p.tilt < 8) recs.push("<b>Cleaning:</b> below about 10° of tilt, rain does not wash dust off the glass. Tilting to 10–15° costs a little energy but saves on cleaning.");
   }
   const cov = S.recorded.reduce((a, b) => a + b, 0) * BIN;
-  if (cov < 270) recs.push(`Only ${cov}° of the skyline has been measured. Finish the sweep on the <b>Shade</b> tab so the shading figure is complete.`);
+  if (cov < 270) recs.push(`<b>Finish the shade survey:</b> only ${cov}° of the skyline has been traced. Complete the circle in <b>Step 2 (Shade)</b> so the shading figure is accurate.`);
   if (r.shadeLoss > 0.02) {
-    // which direction costs the most beam energy
-    let best = 0, bi = 0;
-    for (let b = 0; b < NBINS; b++) { const s = r.lostByBin[(b - 1 + NBINS) % NBINS] + r.lostByBin[b] + r.lostByBin[(b + 1) % NBINS]; if (s > best) { best = s; bi = b; } }
-    const worst = r.monthLoss.map((v, m) => [v, m]).sort((a, b) => b[0] - a[0]).slice(0, 3).filter(x => x[0] > 0.01).map(x => MONTHS[x[1]]);
-    recs.push(`Shading costs <b>${pct(r.shadeLoss)}</b>. The main obstruction is toward <b>${cardinal(bi * BIN)} (${bi * BIN}°)</b>${worst.length ? `, worst in ${worst.join(", ")}` : ""}. Trimming or relocating away from it helps most.`);
-    if (r.shadeLoss > 0.05) recs.push("With partial shade, one shaded cell can pull down a whole string. Microinverters or panel optimisers keep the unshaded panels producing.");
+    const f = shadeFacts(r);
+    recs.push(`<b>Reduce shading:</b> obstacles cost <b>${pct(r.shadeLoss)}</b> of the energy. Most of it comes from the <b>${f.dir}</b>${f.worst.length ? `, worst in ${f.worst.join(", ")}` : ""}. Trimming that tree or moving the panel away from that obstruction helps most.`);
+    if (r.shadeLoss > 0.05) recs.push("<b>Wiring:</b> with partial shade, one shaded cell can pull down a whole string. Microinverters or panel optimisers keep the unshaded panels producing.");
     if (!M.shadeOpt) M.shadeOpt = searchOptimum(true, 3, 10);
     if (p && M.shadeOpt && M.shadeOpt.p / poa(p.tilt, p.az, { shade: true }) > 1.01 && (Math.abs(M.shadeOpt.tilt - M.opt.tilt) > 2 || Math.abs(wrap180(M.shadeOpt.az - M.opt.az)) > 5))
-      recs.push(`With this skyline, the best orientation shifts to <b>${fmt(M.shadeOpt.tilt, 0)}° tilt, ${fmt(M.shadeOpt.az, 0)}° ${cardinal(M.shadeOpt.az)}</b>.`);
-  } else if (cov >= 270) recs.push(`Shading is minor (${pct(r.shadeLoss)}). This spot works well.`);
+      recs.push(`<b>Best angle with this shade:</b> the best orientation shifts to <b>${fmt(M.shadeOpt.tilt, 0)}° tilt, ${fmt(M.shadeOpt.az, 0)}° ${cardinal(M.shadeOpt.az)}</b>.`);
+  } else if (cov >= 270) recs.push(`<b>Shade:</b> minor (${pct(r.shadeLoss)}). This spot works well.`);
   $("recs").innerHTML = recs.map(x => `<li>${x}</li>`).join("");
 
   const rows = [
@@ -1168,7 +1241,7 @@ function updateStatus() {
   $("btnFreeze").disabled = S.manual || !LIVE.on;
 }
 function toggleTrace() {
-  if (!LIVE.on && !LIVE.tracing) { toast("Start the sensors first (Align tab), or drag on the chart to sketch the skyline."); return; }
+  if (!LIVE.on && !LIVE.tracing) { toast("Start the sensors first (Step 1, Angle tab), or drag on the chart to sketch the skyline."); return; }
   LIVE.tracing = !LIVE.tracing; LIVE.lastBin = null;
   $("btnTrace").textContent = LIVE.tracing ? "Stop tracing" : "Trace skyline";
   $("btnTrace").className = "btn " + (LIVE.tracing ? "rec" : "primary");
