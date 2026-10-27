@@ -527,6 +527,13 @@ nav.tabs {
         <span class="label">What to do, biggest gain first</span>
         <div class="actions" id="recs"></div>
       </div>
+      <div class="card-sec">
+        <button class="btn primary" id="btnShare" type="button">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>
+          Share this result
+        </button>
+        <span class="hint" style="text-align:center">Creates a one-page summary image to send to the owner, installer or manager.</span>
+      </div>
     </div>
 
     <div class="panel map-wrap">
@@ -1396,6 +1403,7 @@ function updateReport() {
   }
   if (cov < 270) acts.push({ i: "survey", t: "Finish the shade survey", d: `Only ${cov}° of 360° traced in Step 2.`, tag: "Data incomplete", g: Infinity });
   acts.sort((a, b) => b.g - a.g);
+  LAST_ACTS = acts;
   $("recs").innerHTML = acts.map(a => `<div class="act"><svg viewBox="0 0 24 24" aria-hidden="true">${I[a.i]}</svg><div><b>${a.t}</b><span>${a.d}</span></div><span class="tag${a.gain ? " gain" : ""}">${a.tag}</span></div>`).join("");
 
   // survey details
@@ -1625,6 +1633,97 @@ function csv() {
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "solar-site-survey.csv";
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
+/* ---------- one-page summary image (1080×1350, fixed light palette so it reads the same everywhere) ---------- */
+let LAST_ACTS = [];
+function buildSummaryImage() {
+  const W = 1080, H = 1350, P = 64, cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+  const ctx = cv.getContext("2d"), r = R, p = r.panel, sc = scenarios(r), f = shadeFacts(r), t = S.tariff;
+  const K = { bg: "#ffffff", fg: "#1b1e1b", muted: "#5b625c", line: "#d3d7cf", tile: "#f1f2ee", prod: "#2a78d6", angle: "#eda100", shade: "#e34948", good: "#2c7d48", warn: "#a8700f", bad: "#b83a26", accent: "#b85f00" };
+  const disp = s => `600 ${s}px "Barlow Semi Condensed", "Arial Narrow", sans-serif`, body = (s, w = 400) => `${w} ${s}px "IBM Plex Sans", system-ui, sans-serif`, mono = (s, w = 500) => `${w} ${s}px "IBM Plex Mono", ui-monospace, monospace`;
+  const text = (s, x, y, font, col, align = "left", base = "alphabetic") => { ctx.font = font; ctx.fillStyle = col; ctx.textAlign = align; ctx.textBaseline = base; ctx.fillText(s, x, y); return ctx.measureText(s).width; };
+  const label = (s, x, y) => { ctx.letterSpacing = "2px"; text(s.toUpperCase(), x, y, mono(20), K.muted); ctx.letterSpacing = "0px"; };
+  const rrect = (x, y, w, h, rad, col) => { ctx.fillStyle = col; ctx.beginPath(); ctx.roundRect(x, y, w, h, rad); ctx.fill(); };
+  ctx.fillStyle = K.bg; ctx.fillRect(0, 0, W, H);
+  rrect(0, 0, W, 14, 0, K.accent);
+
+  // header
+  text("SOLAR SITE SURVEY", P, 84, mono(24, 600), K.accent);
+  text(new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }), W - P, 84, mono(24), K.muted, "right");
+  text(`${fmt(Math.abs(S.lat), 2)}°${S.lat >= 0 ? "N" : "S"}, ${fmt(Math.abs(S.lon), 2)}°${S.lon >= 0 ? "E" : "W"} · ${fmt(S.kwp, 1)} kW system`, P, 124, body(26), K.muted);
+
+  if (!p) { text("Measure a panel first (Step 1).", P, 300, disp(56), K.fg); return cv; }
+  const net = r.net, lvl = net >= 0.95 ? "good" : net >= 0.85 ? "warn" : "bad";
+  const gA = sc.fixAngle - sc.now, gS = sc.ideal - sc.fixAngle, total = gA + gS;
+
+  // verdict
+  const sw = text(`${fmt(net * 100, 1)}`, P - 4, 310, `700 170px "Barlow Semi Condensed", "Arial Narrow", sans-serif`, K[lvl]);
+  text("%", P + sw + 4, 310, disp(70), K[lvl]);
+  const vx = P + sw + 80;
+  text("of the best possible output", vx, 220, body(28), K.muted);
+  text(`${fmt(r.eNet, 0)} kWh per year`, vx, 266, disp(44), K.fg);
+  const pill = lvl === "good" ? "Good site" : lvl === "warn" ? "Fair site, worth fixing" : "Poor site";
+  ctx.font = mono(24, 600); const pw = ctx.measureText(pill).width + 32;
+  rrect(vx, 284, pw, 40, 20, K[lvl] + "22"); text(pill, vx + 16, 312, mono(24, 600), K[lvl]);
+
+  // headline + loss tiles
+  text(total / sc.ideal < 0.03 ? `Losing only ${fmt(total, 0)} kWh (${rs(total * t)}) a year` : `Losing ${fmt(total, 0)} kWh (${rs(total * t)}) a year`, P, 395, disp(54), K.fg);
+  const tiles = [[gS, K.shade, `Shade from ${f.card}`, `${rs(gS * t)}/yr`, `${fmt(gS, 0)} kWh`], [gA, K.angle, "Panel angle", `${rs(gA * t)}/yr`, `${fmt(gA, 0)} kWh`]]
+    .filter(c => c[0] * t >= 1).sort((a, b) => b[0] - a[0]).concat([[0, null, "Over 25 years", rsL(total * t * LIFE_YEARS), `${fmt(total * LIFE_YEARS, 0)} kWh`]]);
+  const tw = (W - 2 * P - 16 * (tiles.length - 1)) / tiles.length;
+  tiles.forEach(([, col, l, v, s], i) => {
+    const x = P + i * (tw + 16), y = 422;
+    rrect(x, y, tw, 140, 14, K.tile);
+    if (col) rrect(x + 22, y + 26, 16, 16, 3, col);
+    ctx.letterSpacing = "1.5px"; text(l.toUpperCase(), x + (col ? 48 : 22), y + 42, mono(19), K.muted); ctx.letterSpacing = "0px";
+    text(v, x + 22, y + 96, disp(48), K.fg); text(s, x + 22, y + 126, mono(20), K.muted);
+  });
+
+  // energy breakdown bar
+  label("Where the year's energy goes", P, 616);
+  const bw = W - 2 * P, segs = [[net, K.prod, "Produced"], [gA / sc.ideal, K.angle, "Lost to angle"], [gS / sc.ideal, K.shade, "Lost to shade"]];
+  let bx = P; segs.forEach(([v, col], i) => { const w = v * bw - (i ? 3 : 0); if (w > 0) { rrect(bx + (i ? 3 : 0), 634, w, 44, i === 0 ? 8 : 4, col); } bx += v * bw; });
+  let lx = P; segs.forEach(([v, col, l]) => { rrect(lx, 700, 18, 18, 3, col); lx += 28; lx += text(`${l} ${fmt(v * 100, 1)}%`, lx, 717, mono(22), K.fg) + 34; });
+
+  // now vs after
+  label("Now vs after fixing · electricity per year", P, 782);
+  const opts = [["Now", sc.now], ["Angle fixed", sc.fixAngle], ["Angle + shade fixed", sc.ideal]], X = v => v / sc.ideal * 380;
+  opts.forEach(([n, v], i) => {
+    const y = 800 + i * 56;
+    text(n, P, y + 30, body(26, 500), K.fg);
+    rrect(P + 250, y + 6, X(sc.now), 32, 6, K.prod);
+    if (v - sc.now > 0.5) rrect(P + 250 + X(sc.now) + 3, y + 6, X(v) - X(sc.now) - 3, 32, 4, K.good);
+    const ew = text(`${fmt(v, 0)} kWh`, P + 250 + X(v) + 14, y + 31, mono(22, 600), K.fg);
+    if (v - sc.now > 0.5) text(`+${rs((v - sc.now) * t)}/yr`, P + 250 + X(v) + 26 + ew, y + 31, mono(22, 600), K.good);
+  });
+
+  // actions
+  label("What to do", P, 1008);
+  const acts = LAST_ACTS.filter(a => a.g > 0 || a.gain).slice(0, 2).concat(LAST_ACTS.filter(a => !(a.g > 0 || a.gain)).slice(0, 1)).slice(0, 3);
+  acts.forEach((a, i) => {
+    const y = 1024 + i * 60;
+    ctx.strokeStyle = K.line; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(P, y); ctx.lineTo(W - P, y); ctx.stroke();
+    text(`${i + 1}. ${a.t}`, P, y + 40, body(28, 600), K.fg);
+    ctx.font = mono(22, 600); const tgw = ctx.measureText(a.tag).width + 28;
+    rrect(W - P - tgw, y + 14, tgw, 36, 18, a.gain ? K.good + "22" : K.tile); text(a.tag, W - P - tgw / 2, y + 39, mono(22, 600), a.gain ? K.good : K.fg, "center");
+  });
+
+  // footer
+  const cov = S.recorded.reduce((a, b) => a + b, 0) * BIN;
+  text(`Panel ${fmt(p.tilt, 0)}° facing ${cardinal(p.az)} · best ${fmt(sc.angle.tilt, 0)}° facing ${cardinal(sc.angle.az)} · skyline ${cov}° traced`, P, H - 64, mono(20), K.muted);
+  text("Measured with phone sensors (accelerometer, compass, GPS, camera). Clear-sky estimate.", P, H - 34, mono(18), K.muted);
+  return cv;
+}
+async function shareSummary() {
+  const cv = buildSummaryImage();
+  const blob = await new Promise(res => cv.toBlob(res, "image/png"));
+  const file = new File([blob], "solar-site-summary.png", { type: "image/png" });
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: "Solar site summary", text: summaryText() }); return; }
+  } catch (e) { if (e.name === "AbortError") return; }
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = file.name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  toast("Summary image saved.");
+}
 function summaryText() {
   const r = R, p = r.panel;
   return [`Solar Site Survey, ${fmt(S.lat, 4)}, ${fmt(S.lon, 4)}`,
@@ -1645,6 +1744,7 @@ function init() {
   $("btnClear").addEventListener("click", () => { S.horizon.fill(0); S.recorded.fill(0); rebuildShading(); save(); toast("Skyline cleared."); });
   $("btnGps").addEventListener("click", () => getGps(false));
   $("btnCsv").addEventListener("click", csv);
+  $("btnShare").addEventListener("click", shareSummary);
   $("btnCopy").addEventListener("click", () => {
     const text = summaryText();
     navigator.clipboard.writeText(text).then(() => toast("Summary copied."), () => toast("Copy blocked. Select the details table instead."));
