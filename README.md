@@ -9,23 +9,19 @@ A phone web app that measures how well a rooftop solar panel is placed, using th
 | GPS | Latitude, which sets the sun's path |
 | Camera | Viewfinder for tracing the skyline |
 
-**Align tab:** lay the phone flat on the panel. It shows the live tilt and direction, the best tilt and direction for your latitude, a yield map (a polar heat map of annual output for every tilt and direction), the % energy lost, and kWh/₹ lost per year.
+**Live app:** https://vibhaa2005.github.io/solar-site-survey/
 
-**Shade tab:** point the camera at the skyline and turn through 360°. The app records how high the obstacles are in each direction, draws them on a sun-path diagram, and calculates the hours of direct sun and the energy lost to shade, month by month.
+**Step 1 · Angle** (phone flat on the panel): score as % of the best angle; a Yours / Best / Change table; kWh and ₹ lost per year; two "what if" line charts (energy vs tilt and energy vs direction, with the within-1% band); a polar map of every possible angle; live raw sensor readings and a tilt-over-time trace.
 
-**Report tab:** alignment and shading combined into one "% of ideal" figure, expected kWh/year, money lost, and recommendations. Exports a CSV.
+**Step 2 · Shade** (camera pointed at the skyline, turning 360°): % of yearly energy lost to shade; direct-sun hours, main obstacle and worst months; a sun-path diagram with the traced skyline (blocked sun in red); direct-sun hours by month.
+
+**Step 3 · Result:** overall % of ideal with a one-line verdict; a Now / Angle fixed / Both fixed comparison (kWh, ₹ per year, ₹ over 25 years, CO₂); power through a clear summer, equinox or winter day showing when energy is lost; where the year's energy goes; actions ranked by gain; survey details and CSV export.
 
 All the code is in `index.html`: plain HTML/CSS/JavaScript, no libraries, no build step.
 
-## Hosting (needed for sensors)
+## Hosting
 
-Phone browsers only give sensor, GPS and camera access to pages served over **https**. Opening the file directly won't work on a phone. The easiest free option is GitHub Pages:
-
-1. Create a public repo on github.com (e.g. `solar-site-survey`) and upload `index.html` (Add file → Upload files).
-2. Settings → Pages → Source: *Deploy from a branch*, Branch: `main`, folder `/ (root)` → Save.
-3. After about a minute the app is live at `https://<username>.github.io/solar-site-survey/`.
-
-Works best in **Chrome on Android**. On iPhone (Safari), tap Start sensors and allow Motion & Orientation. Lay the phone flat for 2 s first so the compass locks.
+Phone browsers only give sensor, GPS and camera access to pages served over **https**, so the app is hosted on GitHub Pages (link above). Works best in **Chrome on Android**. On iPhone (Safari), tap Start sensors and allow Motion & Orientation. Lay the phone flat for 2 s first so the compass locks.
 
 ## Method (short)
 
