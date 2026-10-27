@@ -178,8 +178,12 @@ table.cmp, table.scen { font-size: 15px; }
 .facts dt svg { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .facts dd { margin: 0; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
 .card-sec { display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
-.headline .ang { color: var(--s-angle); }
-.headline .shd { color: var(--s-shade); }
+#lossTiles { grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; }
+#lossTiles .tile { padding: 8px 10px; }
+#lossTiles .v { font-size: 21px; }
+#lossTiles .label { font-size: 10px; letter-spacing: 0.05em; }
+.tile .label .sw { width: 9px; height: 9px; border: 0; margin-right: 5px; vertical-align: 0; }
+.tile .sub-v { font: 12px/1.3 var(--font-mono); color: var(--muted); }
 .headline { margin: 0; font-family: var(--font-display); font-size: 21px; font-weight: 600; line-height: 1.25; text-wrap: balance; }
 .sub { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
 .insight { font: 600 12px/1.4 var(--font-mono); color: var(--fg); background: var(--surface-2); padding: 2px 8px; border-radius: 4px; }
@@ -501,6 +505,7 @@ nav.tabs {
         </div>
       </div>
       <p class="headline" id="headline"></p>
+      <div class="tiles" id="lossTiles"></div>
       <div class="card-sec">
         <span class="label">Where the year's energy goes</span>
         <div class="waterfall" role="img" id="wfBar" aria-label="Breakdown of losses">
@@ -1326,17 +1331,22 @@ function updateReport() {
     $("netBig").className = "big"; $("netBig").innerHTML = `–<small>%</small>`; $("netNote").textContent = "No panel measured yet";
     $("netChip").hidden = true;
     $("headline").textContent = "Measure the panel in Step 1 and trace the skyline in Step 2 to see the verdict.";
+    $("lossTiles").innerHTML = "";
   } else {
     const lvl = net >= 0.95 ? "good" : net >= 0.85 ? "warn" : "bad";
     $("netBig").className = "big state-" + lvl; $("netBig").innerHTML = `${fmt(net * 100, 1)}<small>%</small>`;
     $("netNote").textContent = `${fmt(r.eNet, 0)} kWh per year`;
     setPill($("netChip"), lvl, lvl === "good" ? "✓ Good site" : lvl === "warn" ? "! Fair site" : "✕ Poor site");
     const gA = sc.fixAngle - sc.now, gS = sc.ideal - sc.fixAngle, total = gA + gS, t = S.tariff;
-    const causes = [[gS, `<span class="shd">${rs(gS * t)} to shade from the ${f.card}</span>`], [gA, `<span class="ang">${rs(gA * t)} to the panel angle</span>`]]
-      .filter(c => c[0] * t >= 1).sort((a, b) => b[0] - a[0]).map(c => c[1]);
-    $("headline").innerHTML = total / sc.ideal < 0.03
-      ? `Losing only ${fmt(total, 0)} kWh (${rs(total * t)}) a year, ${pct(total / sc.ideal)} of the best possible. No fix needed.`
-      : `Losing ${fmt(total, 0)} kWh (${rs(total * t)}) a year: ${causes.join(" and ")}. That is ${rsL(total * t * LIFE_YEARS)} over 25 years.`;
+    $("headline").textContent = total / sc.ideal < 0.03
+      ? `Losing only ${fmt(total, 0)} kWh (${rs(total * t)}) a year. No fix needed.`
+      : `Losing ${fmt(total, 0)} kWh (${rs(total * t)}) a year`;
+    // one small card per cause (bigger first), then the lifetime total
+    const tile = (sw, label, val, sub) => `<div class="tile"><span class="label">${sw ? `<i class="sw" style="background:var(${sw})"></i>` : ""}${label}</span><span class="v">${val}</span><span class="sub-v">${sub}</span></div>`;
+    $("lossTiles").innerHTML = [[gS, tile("--s-shade", `Shade from ${f.card}`, `${rs(gS * t)}<small>/yr</small>`, `${fmt(gS, 0)} kWh`)],
+                                [gA, tile("--s-angle", "Panel angle", `${rs(gA * t)}<small>/yr</small>`, `${fmt(gA, 0)} kWh`)]]
+      .filter(c => c[0] * t >= 1).sort((a, b) => b[0] - a[0]).map(c => c[1]).join("") +
+      tile(null, "Over 25 years", rsL(total * t * LIFE_YEARS), `${fmt(total * LIFE_YEARS, 0)} kWh`);
   }
 
   // now vs after table
