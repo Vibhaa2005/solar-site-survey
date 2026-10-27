@@ -177,6 +177,12 @@ table.cmp, table.scen { font-size: 15px; }
 .facts dt { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; }
 .facts dt svg { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .facts dd { margin: 0; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+details.fold summary { list-style: none; cursor: pointer; display: flex; align-items: baseline; gap: 8px; font-family: var(--font-display); font-weight: 600; font-size: 18px; min-height: 32px; }
+details.fold summary::-webkit-details-marker { display: none; }
+details.fold summary::before { content: "▸"; color: var(--accent); transition: transform 0.15s; display: inline-block; }
+details.fold[open] summary::before { transform: rotate(90deg); }
+details.fold summary .hint { font-family: var(--font-body); font-weight: 400; }
+details.fold table { margin-top: 6px; }
 .card-sec { display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
 #lossTiles { grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; }
 #lossTiles .tile { padding: 8px 10px; }
@@ -556,10 +562,12 @@ nav.tabs {
       <dl class="facts" id="dayFacts"></dl>
     </div>
 
-    <div class="panel" style="display:grid;gap:8px">
-      <h3>Survey details</h3>
-      <table><tbody id="detail"></tbody></table>
-      <div class="row" style="margin-top:6px">
+    <div class="panel" style="display:grid;gap:10px">
+      <details class="fold">
+        <summary>Survey details <span class="hint">location, angles, settings</span></summary>
+        <table><tbody id="detail"></tbody></table>
+      </details>
+      <div class="row">
         <button class="btn" id="btnCsv" type="button">Download survey (CSV)</button>
         <button class="btn" id="btnCopy" type="button">Copy summary</button>
       </div>
