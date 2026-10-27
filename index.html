@@ -1,0 +1,1278 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Solar Site Survey</title>
+<meta name="description" content="Phone-sensor tool that measures a solar panel's tilt, direction and shading, and estimates the energy lost.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: single-column field instrument. Sticky status header, one tool per tab, thumb-reach tab bar at the bottom. */
+:root {
+  --bg: #f3f4f0;
+  --surface: #ffffff;
+  --surface-2: #e8eae4;
+  --fg: #1b1e1b;
+  --muted: #5b625c;
+  --line: #d3d7cf;
+  --accent: #b85f00;
+  --accent-soft: #f6e3cc;
+  --accent-fg: #ffffff;
+  --good: #2c7d48;
+  --warn: #a8700f;
+  --bad: #b83a26;
+  --heat-lo: #eef0ea;
+  --heat-hi: #d8730a;
+  --sky-hi: #dbe7f0;
+  --sky-lo: #f4f7f9;
+  --obstacle: #56645a;
+  --font-display: "Barlow Semi Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --nav-h: 64px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111412; --surface: #1a1e1b; --surface-2: #232823; --fg: #e7eae5; --muted: #9ba39c;
+    --line: #2e342f; --accent: #f0a33c; --accent-soft: #3a2a14; --accent-fg: #1a1205;
+    --good: #5cc07e; --warn: #e2b14d; --bad: #ef7059; --heat-lo: #1e231f; --heat-hi: #f0a33c;
+    --sky-hi: #1c2a36; --sky-lo: #172027; --obstacle: #8a9a8e; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111412; --surface: #1a1e1b; --surface-2: #232823; --fg: #e7eae5; --muted: #9ba39c;
+  --line: #2e342f; --accent: #f0a33c; --accent-soft: #3a2a14; --accent-fg: #1a1205;
+  --good: #5cc07e; --warn: #e2b14d; --bad: #ef7059; --heat-lo: #1e231f; --heat-hi: #f0a33c;
+  --sky-hi: #1c2a36; --sky-lo: #172027; --obstacle: #8a9a8e; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--fg);
+  font: 15px/1.5 var(--font-body);
+  padding-top: env(safe-area-inset-top, 0px);
+  -webkit-tap-highlight-color: transparent;
+}
+[hidden] { display: none !important; }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Header */
+.top {
+  position: sticky; top: 0; z-index: 20;
+  background: var(--bg); border-bottom: 1px solid var(--line);
+  padding-block: 10px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.top-in { max-width: 720px; margin: 0 auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.brand { font-family: var(--font-display); font-weight: 700; font-size: 21px; letter-spacing: 0.01em; margin: 0; line-height: 1.1; flex: 1 1 auto; display: flex; align-items: center; gap: 8px; }
+.brand svg { flex: none; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--surface); font: 500 12px/1.4 var(--font-mono);
+  color: var(--muted); cursor: pointer; white-space: nowrap;
+}
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+.chip.live .dot { background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 25%, transparent); }
+.chip.warn .dot { background: var(--warn); }
+.chip.frozen .dot { background: var(--accent); }
+
+main {
+  max-width: 720px; margin: 0 auto;
+  padding-block: 16px calc(var(--nav-h) + 28px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.view { display: grid; gap: 16px; }
+.view > * { min-width: 0; }
+
+h2 { font-family: var(--font-display); font-weight: 600; font-size: 24px; line-height: 1.15; margin: 0; text-wrap: balance; }
+h3 { font-family: var(--font-display); font-weight: 600; font-size: 18px; margin: 0; }
+.lede { color: var(--muted); margin: 4px 0 0; max-width: 62ch; }
+.label { font: 500 11px/1.3 var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+.panel.flush { padding: 0; overflow: hidden; }
+
+/* Start banner */
+.start { display: grid; gap: 10px; border-color: var(--accent); background: var(--accent-soft); }
+.start p { margin: 0; }
+
+.btn {
+  appearance: none; border: 1px solid var(--line); background: var(--surface); border-radius: 8px;
+  padding: 10px 14px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px;
+}
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.btn.rec { background: var(--bad); border-color: var(--bad); color: #fff; }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.row > .btn { flex: 1 1 140px; }
+.link { background: none; border: 0; padding: 0; color: var(--accent); font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+
+/* Big readout */
+.hero { display: grid; grid-template-columns: auto 1fr; gap: 4px 18px; align-items: end; }
+.big {
+  font-family: var(--font-display); font-weight: 700; font-size: 64px; line-height: 0.9;
+  font-variant-numeric: tabular-nums; letter-spacing: -0.01em;
+}
+.big small { font-size: 28px; font-weight: 600; margin-left: 2px; }
+.hero-side { display: grid; gap: 2px; padding-bottom: 4px; }
+.hero-side strong { font-family: var(--font-display); font-size: 20px; font-weight: 600; line-height: 1.15; }
+.state-good { color: var(--good); }
+.state-warn { color: var(--warn); }
+.state-bad { color: var(--bad); }
+
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font: 600 12px/1.5 var(--font-mono); letter-spacing: 0.02em; }
+.pill.good { background: color-mix(in srgb, var(--good) 16%, transparent); color: var(--good); }
+.pill.warn { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
+.pill.bad { background: color-mix(in srgb, var(--bad) 16%, transparent); color: var(--bad); }
+
+/* Measurement rows */
+.meas { display: grid; gap: 14px; }
+.meas-row { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; align-items: baseline; }
+.meas-row .val { font-family: var(--font-display); font-size: 30px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1; }
+.meas-row .val small { font-size: 16px; color: var(--muted); font-weight: 500; }
+.meas-row .target { text-align: right; font: 13px/1.3 var(--font-mono); color: var(--muted); }
+.meas-row .advice { grid-column: 1 / -1; font-weight: 600; }
+.bar { grid-column: 1 / -1; position: relative; height: 10px; border-radius: 5px; background: var(--surface-2); margin-top: 6px; }
+.bar .tgt { position: absolute; top: -4px; width: 2px; height: 18px; background: var(--fg); transform: translateX(-1px); }
+.bar .cur { position: absolute; top: -3px; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); border: 2px solid var(--surface); transform: translateX(-8px); transition: left 0.15s linear; }
+.bar .tol { position: absolute; top: 0; height: 10px; border-radius: 5px; background: color-mix(in srgb, var(--good) 35%, transparent); }
+
+canvas { display: block; width: 100%; max-width: 100%; touch-action: none; }
+.map-wrap { display: grid; gap: 10px; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font: 12px/1.4 var(--font-mono); color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 14px; height: 10px; border-radius: 2px; display: inline-block; border: 1px solid var(--line); }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+.stat { display: grid; gap: 2px; }
+.stat .v { font-family: var(--font-display); font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.stat .v small { font-size: 14px; color: var(--muted); font-weight: 500; }
+
+/* Viewfinder */
+.finder {
+  position: relative; width: 100%; aspect-ratio: 4 / 3; max-height: 52vh; border-radius: 10px; overflow: hidden;
+  background: linear-gradient(#5d87a8, #a9c4d6 70%, #6a7a6c 70.5%, #45524a);
+  border: 1px solid var(--line);
+}
+.finder video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.cross { position: absolute; inset: 0; pointer-events: none; }
+.cross::before, .cross::after { content: ""; position: absolute; background: rgba(255,255,255,0.9); box-shadow: 0 0 0 1px rgba(0,0,0,0.35); }
+.cross::before { left: 50%; top: 22%; bottom: 22%; width: 2px; transform: translateX(-1px); }
+.cross::after { top: 50%; left: 22%; right: 22%; height: 2px; transform: translateY(-1px); }
+.ring { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.9); box-shadow: 0 0 0 1px rgba(0,0,0,0.3); pointer-events: none; }
+.finder.rec .ring { border-color: #ff5a45; }
+.hud {
+  position: absolute; left: 10px; right: 10px; bottom: 10px; display: flex; justify-content: space-between; align-items: end; gap: 8px;
+  color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.7); pointer-events: none;
+}
+.hud .big { font-size: 40px; color: #fff; }
+.hud .label { color: rgba(255,255,255,0.85); }
+.rec-tag { position: absolute; top: 10px; left: 10px; background: #d63b26; color: #fff; padding: 2px 8px; border-radius: 4px; font: 600 12px/1.5 var(--font-mono); letter-spacing: 0.06em; }
+.finder-msg { position: absolute; left: 0; right: 0; top: 0; padding: 12px 16px 0 90px; text-align: right; font-size: 13px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.6); font-weight: 500; }
+
+.cover { display: grid; gap: 6px; }
+.cover-bar { height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
+.cover-bar i { display: block; height: 100%; background: var(--accent); width: 0; transition: width 0.2s; }
+
+/* Report */
+.waterfall { display: flex; height: 34px; border-radius: 6px; overflow: hidden; background: var(--surface-2); }
+.waterfall div { height: 100%; min-width: 0; transition: width 0.3s; }
+.wf-net { background: var(--good); }
+.wf-or { background: var(--warn); }
+.wf-sh { background: var(--bad); }
+.recs { margin: 0; padding-left: 20px; display: grid; gap: 8px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+td, th { text-align: left; padding: 7px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+td:last-child, th:last-child { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+th { font: 500 11px/1.3 var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+
+/* Setup */
+.field { display: grid; gap: 4px; }
+.field label { font-weight: 500; }
+.field .hint { color: var(--muted); font-size: 13px; }
+.field input, .field select {
+  width: 100%; min-height: 44px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg);
+  font-family: var(--font-mono);
+}
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+input[type="range"] { width: 100%; accent-color: var(--accent); min-height: 32px; padding: 0; background: none; border: 0; }
+.switch { display: flex; align-items: center; gap: 10px; font-weight: 500; cursor: pointer; }
+.switch input { width: 22px; height: 22px; accent-color: var(--accent); }
+details summary { cursor: pointer; font-family: var(--font-display); font-weight: 600; font-size: 18px; }
+details p, details li { color: var(--muted); max-width: 65ch; }
+.formula { font-family: var(--font-mono); font-size: 13px; background: var(--surface-2); padding: 8px 10px; border-radius: 6px; overflow-x: auto; white-space: nowrap; color: var(--fg); }
+
+/* Toast */
+.toast {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(var(--nav-h) + 14px + env(safe-area-inset-bottom, 0px)); z-index: 40;
+  background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-weight: 500; max-width: calc(100% - 32px);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+}
+
+/* Tab bar */
+nav.tabs {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+  background: var(--surface); border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px);
+}
+.tabs-in { max-width: 720px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, 1fr); height: var(--nav-h); }
+.tab {
+  appearance: none; border: 0; background: none; cursor: pointer; display: grid; place-items: center; align-content: center; gap: 3px;
+  color: var(--muted); font: 600 12px/1 var(--font-body); position: relative;
+}
+.tab svg { width: 24px; height: 24px; }
+.tab[aria-selected="true"] { color: var(--accent); }
+.tab[aria-selected="true"]::before { content: ""; position: absolute; top: 0; left: 25%; right: 25%; height: 3px; border-radius: 0 0 3px 3px; background: var(--accent); }
+
+@media (prefers-reduced-motion: reduce) {
+  .bar .cur, .cover-bar i, .waterfall div { transition: none; }
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-in">
+    <h1 class="brand">
+      <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="9" r="4.2" fill="var(--accent)"/><path d="M13 1.5v2M13 14.5v2M5.5 9h2M18.5 9h2M7.7 3.7l1.4 1.4M16.9 12.9l1.4 1.4M7.7 14.3l1.4-1.4M16.9 5.1l1.4-1.4" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round"/><path d="M3 24l3.5-6h13L23 24z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9.8 18L8.5 24M16.2 18l1.3 6M4.8 21h16.4" stroke="currentColor" stroke-width="1.2"/></svg>
+      Solar Site Survey
+    </h1>
+    <button class="chip" id="locChip" type="button" title="Change location"><span class="mono" id="locText">12.99°N 80.23°E</span></button>
+    <span class="chip" id="sensorChip"><span class="dot"></span><span id="sensorText">Sensors off</span></span>
+  </div>
+</header>
+
+<main>
+  <!-- ALIGN -->
+  <section class="view" id="view-align" data-view="align">
+    <div>
+      <h2>Panel alignment</h2>
+      <p class="lede">Lay the phone flat on the panel, screen up. The app reads the panel's tilt and the direction it faces, then compares them with the best orientation for your location.</p>
+    </div>
+
+    <div class="panel start" id="startAlign">
+      <p><strong>Start the sensors to measure a panel.</strong> The app reads the phone's accelerometer, gyroscope and compass, and uses GPS to find your latitude.</p>
+      <div class="row">
+        <button class="btn primary" id="btnStart" type="button">Start sensors</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="hero">
+        <div class="big" id="yieldBig">–<small>%</small></div>
+        <div class="hero-side">
+          <span class="label">of the best possible yield</span>
+          <strong id="yieldNote">Waiting for a reading</strong>
+          <span class="mono" id="yieldLoss" style="color:var(--muted);font-size:13px"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel meas">
+      <div class="meas-row">
+        <div><div class="label">Tilt from horizontal</div><div class="val" id="tiltVal">–<small>°</small></div></div>
+        <div class="target" id="tiltTarget">best –°</div>
+        <div class="bar" id="tiltBar"><div class="tol" id="tiltTol"></div><div class="tgt" id="tiltTgt"></div><div class="cur" id="tiltCur"></div></div>
+        <div class="advice" id="tiltAdvice"></div>
+      </div>
+      <div class="meas-row">
+        <div><div class="label">Panel faces</div><div class="val" id="azVal">–<small>°</small></div></div>
+        <div class="target" id="azTarget">best –°</div>
+        <div class="advice" id="azAdvice"></div>
+      </div>
+      <div class="row">
+        <button class="btn" id="btnFreeze" type="button">Freeze reading</button>
+      </div>
+    </div>
+
+    <div class="panel map-wrap">
+      <div class="row" style="justify-content:space-between">
+        <h3>Yield map</h3>
+        <span class="pill good" id="onTarget" hidden>On target</span>
+      </div>
+      <p class="lede" style="margin:0">Each point is one way the panel could face. Distance from the centre is the tilt, and the angle is the compass direction. Move the orange dot into the darkest band.</p>
+      <canvas id="polar" aria-label="Map of annual yield by panel tilt and direction, with the current orientation marked"></canvas>
+      <div class="legend" id="polarLegend"></div>
+    </div>
+
+    <div class="panel map-wrap">
+      <div class="row" style="justify-content:space-between">
+        <h3>Live sensor data</h3>
+        <span class="mono" style="font-size:12px;color:var(--muted)" id="rateText"></span>
+      </div>
+      <canvas id="spark" aria-label="Measured tilt over the last 20 seconds"></canvas>
+      <table><tbody>
+        <tr><td>Accelerometer gravity vector x, y, z</td><td id="rawAcc">–</td></tr>
+        <tr><td>Tilt from accelerometer alone</td><td id="rawAccTilt">–</td></tr>
+        <tr><td>Compass heading of phone top</td><td id="rawHead">–</td></tr>
+        <tr><td>Orientation α, β, γ (sensor fusion)</td><td id="rawEuler">–</td></tr>
+        <tr><td>GPS position</td><td id="rawGps">–</td></tr>
+      </tbody></table>
+    </div>
+  </section>
+
+  <!-- SHADE -->
+  <section class="view" id="view-shade" data-view="shade" hidden>
+    <div>
+      <h2>Shading survey</h2>
+      <p class="lede">Stand where the panel will go. Tap <b>Trace skyline</b>, then turn slowly in a full circle, keeping the crosshair on the top edge of buildings, trees and tanks. Aim at the horizon where the sky is open.</p>
+    </div>
+
+    <div class="finder" id="finder">
+      <video id="video" playsinline muted autoplay hidden></video>
+      <div class="finder-msg" id="finderMsg">Camera off. The crosshair still traces.</div>
+      <div class="cross"></div><div class="ring"></div>
+      <div class="rec-tag" id="recTag" hidden>● TRACING</div>
+      <div class="hud">
+        <div><div class="label">Pointing</div><div class="big" id="ptAz">–°</div></div>
+        <div style="text-align:right"><div class="label">Elevation</div><div class="big" id="ptEl">–°</div></div>
+      </div>
+    </div>
+
+    <div class="row">
+      <button class="btn primary" id="btnTrace" type="button">Trace skyline</button>
+      <button class="btn" id="btnCam" type="button">Camera on</button>
+    </div>
+    <div class="cover">
+      <div class="row" style="justify-content:space-between"><span class="label">Skyline measured</span><span class="mono" id="coverText" style="font-size:13px">0° of 360°</span></div>
+      <div class="cover-bar"><i id="coverFill"></i></div>
+    </div>
+
+    <div class="panel map-wrap">
+      <div class="row" style="justify-content:space-between">
+        <h3>Sun-path diagram</h3>
+        <span class="mono" style="font-size:12px;color:var(--muted)" id="spLat"></span>
+      </div>
+      <p class="lede" style="margin:0">Curves show where the sun travels on the 21st of each month. The grey shape is your measured skyline. Wherever a curve passes behind it, the panel is in shade. Drag on the chart to sketch or correct the skyline by hand.</p>
+      <canvas id="sunpath" aria-label="Sun-path diagram with measured skyline"></canvas>
+      <div class="legend">
+        <span><i class="sw" style="background:var(--accent)"></i>Sun in view</span>
+        <span><i class="sw" style="background:var(--bad)"></i>Sun blocked</span>
+        <span><i class="sw" style="background:var(--obstacle)"></i>Obstacles</span>
+      </div>
+      <div class="row">
+        <button class="btn" id="btnClear" type="button">Clear skyline</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="stats">
+        <div class="stat"><span class="label">Energy lost to shade</span><span class="v" id="shLoss">–</span></div>
+        <div class="stat"><span class="label">Direct sun, open sky</span><span class="v" id="shOpen">–</span></div>
+        <div class="stat"><span class="label">Direct sun, this spot</span><span class="v" id="shHere">–</span></div>
+      </div>
+    </div>
+
+    <div class="panel map-wrap">
+      <h3>Direct sun by month</h3>
+      <canvas id="monthly" aria-label="Hours of direct sun per day by month, open sky versus this spot"></canvas>
+      <div class="legend">
+        <span><i class="sw" style="background:var(--surface-2)"></i>Open sky</span>
+        <span><i class="sw" style="background:var(--accent)"></i>This spot</span>
+        <span><b style="color:var(--bad)">n</b> = % of that month's energy lost to shade</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- REPORT -->
+  <section class="view" id="view-report" data-view="report" hidden>
+    <div>
+      <h2>Site report</h2>
+      <p class="lede">Alignment and shading combined into one estimate of what this panel will produce, compared with the ideal for your latitude.</p>
+    </div>
+    <div class="panel" style="display:grid;gap:14px">
+      <div class="hero">
+        <div class="big" id="netBig">–<small>%</small></div>
+        <div class="hero-side">
+          <span class="label">of ideal output at this spot</span>
+          <strong id="netNote"></strong>
+        </div>
+      </div>
+      <div class="waterfall" role="img" id="wfBar" aria-label="Breakdown of losses">
+        <div class="wf-net" id="wfNet"></div><div class="wf-or" id="wfOr"></div><div class="wf-sh" id="wfSh"></div>
+      </div>
+      <div class="legend">
+        <span><i class="sw" style="background:var(--good)"></i>Delivered <b class="mono" id="lgNet"></b></span>
+        <span><i class="sw" style="background:var(--warn)"></i>Alignment loss <b class="mono" id="lgOr"></b></span>
+        <span><i class="sw" style="background:var(--bad)"></i>Shading loss <b class="mono" id="lgSh"></b></span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="stats">
+        <div class="stat"><span class="label">Expected per year</span><span class="v" id="rpE">–</span></div>
+        <div class="stat"><span class="label">Lost per year</span><span class="v state-bad" id="rpLost">–</span></div>
+        <div class="stat"><span class="label">Value lost per year</span><span class="v state-bad" id="rpRs">–</span></div>
+      </div>
+    </div>
+
+    <div class="panel" style="display:grid;gap:10px">
+      <h3>What to do</h3>
+      <ol class="recs" id="recs"></ol>
+    </div>
+
+    <div class="panel" style="display:grid;gap:8px">
+      <h3>Survey details</h3>
+      <table><tbody id="detail"></tbody></table>
+      <div class="row" style="margin-top:6px">
+        <button class="btn" id="btnCsv" type="button">Download survey (CSV)</button>
+        <button class="btn" id="btnCopy" type="button">Copy summary</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- SETUP -->
+  <section class="view" id="view-setup" data-view="setup" hidden>
+    <div>
+      <h2>Setup</h2>
+      <p class="lede">Location sets the sun's path. System size and tariff turn percentages into kWh and rupees.</p>
+    </div>
+    <div class="panel" style="display:grid;gap:12px">
+      <h3>Location</h3>
+      <div class="grid2">
+        <div class="field"><label for="inLat">Latitude (°, north +)</label><input id="inLat" type="number" step="0.0001" min="-66" max="66" inputmode="decimal"></div>
+        <div class="field"><label for="inLon">Longitude (°, east +)</label><input id="inLon" type="number" step="0.0001" min="-180" max="180" inputmode="decimal"></div>
+      </div>
+      <button class="btn" id="btnGps" type="button">Use my GPS location</button>
+    </div>
+    <div class="panel" style="display:grid;gap:12px">
+      <h3>System</h3>
+      <div class="grid2">
+        <div class="field"><label for="inKwp">System size (kWp)</label><input id="inKwp" type="number" step="0.1" min="0.1" inputmode="decimal"><span class="hint">A typical rooftop is 1–10 kWp.</span></div>
+        <div class="field"><label for="inTariff">Electricity tariff (₹/kWh)</label><input id="inTariff" type="number" step="0.5" min="0" inputmode="decimal"></div>
+        <div class="field"><label for="inPr">Performance ratio</label><input id="inPr" type="number" step="0.01" min="0.5" max="0.95" inputmode="decimal"><span class="hint">Inverter, wiring, heat and dust losses. 0.75–0.80 is typical.</span></div>
+        <div class="field"><label for="inAlb">Ground around the panel</label>
+          <select id="inAlb"><option value="0.2">Grass or soil (0.20)</option><option value="0.25">Concrete roof (0.25)</option><option value="0.5">White-painted roof (0.50)</option></select></div>
+      </div>
+    </div>
+    <div class="panel" style="display:grid;gap:12px">
+      <h3>Compass</h3>
+      <div class="field"><label for="inDecl">Magnetic declination correction (°, east +)</label><input id="inDecl" type="number" step="0.1" min="-30" max="30" inputmode="decimal"><span class="hint">Within about ±2° across India, so 0 is fine. Keep the phone away from steel railings and mounting frames. If readings jump, move the phone in a figure-8 to recalibrate.</span></div>
+    </div>
+    <div class="panel" style="display:grid;gap:12px">
+      <h3>Testing without sensors</h3>
+      <p class="hint" style="margin:0;color:var(--muted);font-size:13px">For checking the calculations on a laptop. On a phone, use the live sensors instead.</p>
+      <label class="switch"><input type="checkbox" id="inManual"> Enter panel angles by hand</label>
+      <button class="btn" id="btnExample" type="button">Load example skyline</button>
+      <div class="grid2" id="manualBox" hidden>
+        <div class="field"><label for="inMTilt">Tilt: <span class="mono" id="mTiltV"></span></label><input id="inMTilt" type="range" min="0" max="90" step="1"></div>
+        <div class="field"><label for="inMAz">Faces: <span class="mono" id="mAzV"></span></label><input id="inMAz" type="range" min="0" max="359" step="1"></div>
+      </div>
+    </div>
+    <details class="panel">
+      <summary>How the numbers are calculated</summary>
+      <p><b>Orientation.</b> The phone's orientation angles (α, β, γ) give a rotation matrix. Its third column is the screen's normal vector in East–North–Up coordinates. Flat on a panel, that vector is the panel normal. Upright, its reverse is the camera's line of sight.</p>
+      <div class="formula">n = Rz(α)·Rx(β)·Ry(γ)·[0,0,1]ᵀ &nbsp; tilt = acos(n_up) &nbsp; azimuth = atan2(n_east, n_north)</div>
+      <p><b>Sun position.</b> For every 3rd day of the year at 10-minute steps of solar time, from the declination δ and hour angle ω at latitude φ:</p>
+      <div class="formula">sin(elev) = sinφ·sinδ + cosφ·cosδ·cosω &nbsp; δ = 23.45°·sin(360°·(284+n)/365)</div>
+      <p><b>Clear-sky irradiance.</b> Kasten–Young air mass, then Meinel's beam model. Diffuse light is taken as 10% of beam.</p>
+      <div class="formula">DNI = 1361·0.7^(AM^0.678) W/m²</div>
+      <p><b>Plane-of-array irradiance</b> uses the isotropic-sky model. Beam light counts only when the sun is above the measured skyline. Sky diffuse is scaled by the sky-view factor of the skyline.</p>
+      <div class="formula">G = DNI·max(0, cos θ)·[sun visible] + DHI·(1+cos β)/2·SVF + GHI·ρ·(1−cos β)/2</div>
+      <p><b>Energy.</b> kWh/yr = kWp × annual G (kWh/m²) × performance ratio × 0.74. The 0.74 factor accounts for clouds and haze and brings clear-sky totals in line with typical Indian yields of about 1,450–1,550 kWh per kWp. Percentage losses do not depend on this factor.</p>
+      <p><b>Limits.</b> This is a single clear-sky model with no local weather data, so it does not capture the monsoon. Treat absolute kWh as an estimate and the percentages as the reliable part.</p>
+    </details>
+  </section>
+</main>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<nav class="tabs" aria-label="Tools">
+  <div class="tabs-in" role="tablist">
+    <button class="tab" role="tab" data-tab="align" aria-selected="true" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 19h18"/><path d="M5 19l12-8"/><path d="M11 19a6 6 0 0 0-1-3.4"/><circle cx="18" cy="6" r="2.5"/></svg>Align</button>
+    <button class="tab" role="tab" data-tab="shade" aria-selected="false" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20h20"/><path d="M4 20v-7h4v7M8 20V9h5v11"/><path d="M17 20v-4"/><circle cx="17" cy="12" r="3.5"/><path d="M3 9a9 9 0 0 1 18 0" stroke-dasharray="2 2.5"/></svg>Shade</button>
+    <button class="tab" role="tab" data-tab="report" aria-selected="false" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 16v-3M12 16v-6M15 16v-4"/></svg>Report</button>
+    <button class="tab" role="tab" data-tab="setup" aria-selected="false" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>Setup</button>
+  </div>
+</nav>
+
+<script>
+"use strict";
+/* ---------- constants & helpers ---------- */
+const D2R = Math.PI / 180, R2D = 180 / Math.PI;
+const BIN = 5, NBINS = 360 / BIN;
+const WEATHER = 0.74;
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const MONTH_START = [0,31,59,90,120,151,181,212,243,273,304,334,365];
+const CARD = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+const $ = id => document.getElementById(id);
+const wrap360 = a => ((a % 360) + 360) % 360;
+const wrap180 = a => { a = wrap360(a); return a > 180 ? a - 360 : a; };
+const cardinal = az => CARD[Math.round(wrap360(az) / 22.5) % 16];
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const fmt = (v, d = 0) => Number.isFinite(v) ? v.toLocaleString("en-IN", { minimumFractionDigits: d, maximumFractionDigits: d }) : "–";
+
+/* ---------- state ---------- */
+const S = {
+  lat: 12.9915, lon: 80.2337, locSource: "IIT Madras (default)",
+  kwp: 3, tariff: 7, pr: 0.77, albedo: 0.25, decl: 0,
+  manual: false, mTilt: 20, mAz: 200,
+  panel: null,                       // {tilt, az} last alignment reading used for the report
+  horizon: new Float32Array(NBINS),  // obstacle elevation (deg) per 5° azimuth bin
+  recorded: new Uint8Array(NBINS),
+};
+const LIVE = { on: false, gotEvent: false, absolute: false, n: null, frozen: false, tracing: false,
+               iosOffset: null, lastBin: null, trail: [], onTarget: false, tab: "align",
+               acc: null, euler: null, gps: null, hist: [], evCount: 0, rate: 0 };
+
+function save() {
+  try {
+    localStorage.setItem("sss-v1", JSON.stringify({
+      lat: S.lat, lon: S.lon, locSource: S.locSource, kwp: S.kwp, tariff: S.tariff, pr: S.pr, albedo: S.albedo,
+      decl: S.decl, manual: S.manual, mTilt: S.mTilt, mAz: S.mAz, panel: S.panel,
+      horizon: Array.from(S.horizon), recorded: Array.from(S.recorded) }));
+  } catch (e) { /* storage unavailable: settings last for this visit only */ }
+}
+function load() {
+  try {
+    const d = JSON.parse(localStorage.getItem("sss-v1") || "null");
+    if (!d) return;
+    for (const k of ["lat","lon","locSource","kwp","tariff","pr","albedo","decl","manual","mTilt","mAz","panel"]) if (d[k] !== undefined) S[k] = d[k];
+    if (Array.isArray(d.horizon) && d.horizon.length === NBINS) S.horizon.set(d.horizon);
+    if (Array.isArray(d.recorded) && d.recorded.length === NBINS) S.recorded.set(d.recorded);
+  } catch (e) { /* ignore corrupt or blocked storage */ }
+}
+
+/* ---------- solar engine ---------- */
+const M = { samples: null, vis: null, svf: 1, ideal: 0, opt: null, heat: null, heatTilts: 31 };
+
+function buildSamples(lat, stepDays = 3, stepMin = 10) {
+  const phi = lat * D2R, rows = [];
+  const days = new Float64Array(12);
+  for (let n = 1; n <= 365; n += stepDays) {
+    let m = 0; while (n > MONTH_START[m + 1]) m++;
+    days[m] += stepDays;
+    const decl = 23.45 * D2R * Math.sin(2 * Math.PI * (284 + n) / 365);
+    for (let t = stepMin / 120; t < 24; t += stepMin / 60) {
+      const s = sunVector(phi, decl, t);
+      if (s.U <= 0.01) continue;
+      const zen = Math.acos(s.U) * R2D;
+      const am = 1 / (s.U + 0.50572 * Math.pow(96.07995 - zen, -1.6364));
+      const dni = 1361 * Math.pow(0.7, Math.pow(am, 0.678));
+      rows.push([s.E, s.N, s.U, wrap360(Math.atan2(s.E, s.N) * R2D), 90 - zen, dni, 0.1 * dni, m]);
+    }
+  }
+  const c = rows.length, f = k => Float32Array.from(rows, r => r[k]);
+  return { count: c, E: f(0), N: f(1), U: f(2), az: f(3), el: f(4), dni: f(5), dhi: f(6),
+           month: Uint8Array.from(rows, r => r[7]), hrs: (stepMin / 60) * stepDays, days };
+}
+function sunVector(phi, decl, solarHour) {
+  const w = 15 * D2R * (solarHour - 12);
+  return {
+    E: -Math.cos(decl) * Math.sin(w),
+    N: Math.sin(decl) * Math.cos(phi) - Math.cos(decl) * Math.sin(phi) * Math.cos(w),
+    U: Math.sin(decl) * Math.sin(phi) + Math.cos(decl) * Math.cos(phi) * Math.cos(w),
+  };
+}
+function horizonAt(az) {
+  // linear interpolation between bin centres, wrapping round north
+  const x = wrap360(az) / BIN, i = Math.floor(x), f = x - i;
+  return S.horizon[i % NBINS] * (1 - f) + S.horizon[(i + 1) % NBINS] * f;
+}
+/* Plane-of-array irradiation in kWh/m² per year. opts: {shade, monthly, lostByBin} */
+function poa(tilt, az, opts = {}) {
+  const sm = M.samples, t = tilt * D2R, a = az * D2R;
+  const nE = Math.sin(t) * Math.sin(a), nN = Math.sin(t) * Math.cos(a), nU = Math.cos(t);
+  const svf = opts.shade ? M.svf : 1;
+  const fs = (1 + nU) / 2 * svf, fg = (1 - nU) / 2 * S.albedo;
+  const vis = opts.shade ? M.vis : null, monthly = opts.monthly ? new Float64Array(12) : null, lost = opts.lostByBin || null;
+  let sum = 0;
+  for (let i = 0; i < sm.count; i++) {
+    const c = nE * sm.E[i] + nN * sm.N[i] + nU * sm.U[i];
+    let beam = c > 0 ? sm.dni[i] * c : 0;
+    if (vis && !vis[i]) { if (lost) lost[Math.floor(sm.az[i] / BIN) % NBINS] += beam; beam = 0; }
+    const g = beam + sm.dhi[i] * fs + (sm.dni[i] * sm.U[i] + sm.dhi[i]) * fg;
+    sum += g;
+    if (monthly) monthly[sm.month[i]] += g;
+  }
+  const k = sm.hrs / 1000;
+  if (monthly) for (let m = 0; m < 12; m++) monthly[m] *= k;
+  return opts.monthly ? { total: sum * k, monthly } : sum * k;
+}
+function searchOptimum(shade, tStep, aStep) {
+  let best = { p: -1, tilt: 0, az: 0 };
+  for (let tl = 0; tl <= 60; tl += tStep) for (let az = 0; az < 360; az += aStep) {
+    const p = poa(tl, az, { shade }); if (p > best.p) best = { p, tilt: tl, az };
+  }
+  // refine around the coarse best
+  const c = { ...best };
+  for (let tl = Math.max(0, c.tilt - tStep); tl <= c.tilt + tStep; tl += 0.5)
+    for (let az = c.az - aStep; az <= c.az + aStep; az += 1) {
+      const p = poa(tl, wrap360(az), { shade }); if (p > best.p) best = { p, tilt: tl, az: wrap360(az) };
+    }
+  return best;
+}
+function rebuildLocation() {
+  M.samples = buildSamples(S.lat);
+  M.opt = searchOptimum(false, 2, 5);
+  M.ideal = M.opt.p;
+  // yield grid: tilt 0..60 step 2 (rows) × azimuth 0..355 step 5 (cols)
+  M.heat = new Float32Array(M.heatTilts * NBINS);
+  for (let r = 0; r < M.heatTilts; r++) for (let c = 0; c < NBINS; c++)
+    M.heat[r * NBINS + c] = poa(r * 2, c * BIN) / M.ideal;
+  M.heatImg = null;
+  rebuildShading();
+}
+function rebuildShading() {
+  const sm = M.samples; M.vis = new Uint8Array(sm.count);
+  for (let i = 0; i < sm.count; i++) M.vis[i] = sm.el[i] > horizonAt(sm.az[i]) ? 1 : 0;
+  // sky-view factor for an unobstructed-plane approximation: 1 − mean(sin²h)
+  let s = 0; for (let b = 0; b < NBINS; b++) { const h = S.horizon[b] * D2R; s += Math.sin(h) ** 2; }
+  M.svf = 1 - s / NBINS;
+  M.shadeOpt = null; // computed lazily for the report
+  markDirty("shade", "report");
+}
+function heatYield(tilt, az) {
+  const tr = clamp(tilt / 2, 0, M.heatTilts - 1), r0 = Math.floor(tr), r1 = Math.min(r0 + 1, M.heatTilts - 1), fr = tr - r0;
+  const ac = wrap360(az) / BIN, c0 = Math.floor(ac) % NBINS, c1 = (c0 + 1) % NBINS, fc = ac - Math.floor(ac);
+  const h = M.heat, at = (r, c) => h[r * NBINS + c];
+  return (at(r0, c0) * (1 - fc) + at(r0, c1) * fc) * (1 - fr) + (at(r1, c0) * (1 - fc) + at(r1, c1) * fc) * fr;
+}
+
+/* ---------- results ---------- */
+let R = null;
+function currentPanel() {
+  if (S.manual) return { tilt: S.mTilt, az: S.mAz };
+  return S.panel;
+}
+function computeResults() {
+  const p = currentPanel();
+  const open = p ? poa(p.tilt, p.az, { monthly: true }) : null;
+  const lostByBin = new Float64Array(NBINS);
+  const shaded = p ? poa(p.tilt, p.az, { shade: true, monthly: true, lostByBin }) : null;
+  // direct sun hours/day per month: open sky vs this spot
+  const sm = M.samples, hOpen = new Float64Array(12), hHere = new Float64Array(12);
+  for (let i = 0; i < sm.count; i++) { hOpen[sm.month[i]] += sm.hrs; if (M.vis[i]) hHere[sm.month[i]] += sm.hrs; }
+  for (let m = 0; m < 12; m++) { hOpen[m] /= sm.days[m]; hHere[m] /= sm.days[m]; }
+  // shading alone, judged on the panel's orientation (or the optimum if no panel yet)
+  const ref = p || M.opt;
+  const refOpen = p ? open : poa(ref.tilt, ref.az, { monthly: true });
+  const refShade = p ? shaded : poa(ref.tilt, ref.az, { shade: true, monthly: true, lostByBin });
+  const shadeLoss = 1 - refShade.total / refOpen.total;
+  const monthLoss = Array.from(refOpen.monthly, (v, m) => v > 0 ? 1 - refShade.monthly[m] / v : 0);
+  const kwhPerM2 = x => S.kwp * x * S.pr * WEATHER;
+  R = {
+    panel: p, ref, hOpen, hHere, shadeLoss, monthLoss, lostByBin,
+    orientYield: p ? open.total / M.ideal : null,
+    net: p ? shaded.total / M.ideal : null,
+    eIdeal: kwhPerM2(M.ideal),
+    eOpen: p ? kwhPerM2(open.total) : null,
+    eNet: p ? kwhPerM2(shaded.total) : null,
+  };
+}
+
+/* ---------- sensors ---------- */
+function rotationNormal(alpha, beta, gamma) {
+  // third column of Rz(α)Rx(β)Ry(γ): device z-axis in East-North-Up
+  const a = alpha * D2R, b = beta * D2R, g = gamma * D2R;
+  const cA = Math.cos(a), sA = Math.sin(a), cB = Math.cos(b), sB = Math.sin(b), cG = Math.cos(g), sG = Math.sin(g);
+  return [cG * sA * sB + cA * sG, sA * sG - cA * cG * sB, cB * cG];
+}
+function onOrientation(e) {
+  if (e.alpha == null || e.beta == null || e.gamma == null) return;
+  LIVE.gotEvent = true;
+  let alpha = e.alpha;
+  if (typeof e.webkitCompassHeading === "number" && !Number.isNaN(e.webkitCompassHeading)) {
+    // iOS: alpha is relative. Learn the offset to true heading while the phone is fairly flat, then reuse it upright.
+    LIVE.absolute = true;
+    const flatTilt = Math.acos(Math.cos(e.beta * D2R) * Math.cos(e.gamma * D2R)) * R2D;
+    const off = wrap360((360 - e.webkitCompassHeading) - e.alpha);
+    if (flatTilt < 50) LIVE.iosOffset = LIVE.iosOffset == null ? off : wrap360(LIVE.iosOffset + 0.15 * wrap180(off - LIVE.iosOffset));
+    alpha = LIVE.iosOffset != null ? e.alpha + LIVE.iosOffset : 360 - e.webkitCompassHeading;
+  } else if (e.type === "deviceorientationabsolute" || e.absolute) {
+    LIVE.absolute = true;
+  }
+  LIVE.euler = [wrap360(alpha), e.beta, e.gamma]; LIVE.evCount++;
+  const n = rotationNormal(alpha, e.beta, e.gamma);
+  if (!LIVE.n) LIVE.n = n;
+  else {
+    const k = 0.18; // low-pass on the vector avoids the 359°→0° wrap problem of smoothing angles
+    for (let i = 0; i < 3; i++) LIVE.n[i] += k * (n[i] - LIVE.n[i]);
+    const len = Math.hypot(...LIVE.n); for (let i = 0; i < 3; i++) LIVE.n[i] /= len;
+  }
+  onReading();
+}
+function panelFromNormal(n) {
+  const tilt = Math.acos(clamp(n[2], -1, 1)) * R2D;
+  return { tilt, az: wrap360(Math.atan2(n[0], n[1]) * R2D + S.decl) };
+}
+function pointingFromNormal(n) {
+  return { el: Math.asin(clamp(-n[2], -1, 1)) * R2D, az: wrap360(Math.atan2(-n[0], -n[1]) * R2D + S.decl) };
+}
+function onMotion(e) {
+  const g = e.accelerationIncludingGravity;
+  if (g && g.x != null) LIVE.acc = [g.x, g.y, g.z];
+}
+function onReading() {
+  if (LIVE.tab === "align") {
+    const now = performance.now();
+    LIVE.hist.push([now, panelFromNormal(LIVE.n).tilt]);
+    while (LIVE.hist.length && now - LIVE.hist[0][0] > 20000) LIVE.hist.shift();
+    markDirty("align");
+  }
+  if (LIVE.tab === "align" && !LIVE.frozen && !S.manual) {
+    S.panel = panelFromNormal(LIVE.n);
+    LIVE.trail.push([S.panel.tilt, S.panel.az]); if (LIVE.trail.length > 40) LIVE.trail.shift();
+    markDirty("align");
+  }
+  if (LIVE.tab === "shade") {
+    const pt = pointingFromNormal(LIVE.n);
+    LIVE.point = pt;
+    if (LIVE.tracing && Math.abs(pt.el) < 75) recordSkyline(pt);
+    markDirty("shadeLive");
+  }
+}
+function recordSkyline(pt) {
+  const bin = Math.round(pt.az / BIN) % NBINS, el = Math.max(0, pt.el);
+  if (LIVE.lastBin != null && LIVE.lastBin.bin !== bin) {
+    // fill skipped bins when the user turns quickly
+    const d = wrap180((bin - LIVE.lastBin.bin) * BIN) / BIN;
+    if (Math.abs(d) > 1 && Math.abs(d) <= 6) {
+      const steps = Math.abs(d), dir = Math.sign(d);
+      for (let k = 1; k < steps; k++) {
+        const b = (LIVE.lastBin.bin + dir * k + NBINS) % NBINS;
+        S.horizon[b] = LIVE.lastBin.el + (el - LIVE.lastBin.el) * k / steps; S.recorded[b] = 1;
+      }
+    }
+  }
+  S.horizon[bin] = el; S.recorded[bin] = 1;
+  LIVE.lastBin = { bin, el };
+  scheduleShading();
+}
+let shadeTimer = null;
+function scheduleShading() {
+  if (shadeTimer) return;
+  shadeTimer = setTimeout(() => { shadeTimer = null; rebuildShading(); save(); }, 250);
+}
+
+async function startSensors() {
+  try {
+    if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
+      const r = await DeviceOrientationEvent.requestPermission();
+      if (r !== "granted") { toast("Motion access was declined. Allow it in Safari settings and reload."); return; }
+    }
+    if (typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function") await DeviceMotionEvent.requestPermission();
+  } catch (err) { toast("Could not ask for motion access: " + err.message); return; }
+  if (!window.isSecureContext) toast("Sensors need an https:// address. Open the hosted link, not a local file.");
+  if ("ondeviceorientationabsolute" in window) window.addEventListener("deviceorientationabsolute", onOrientation);
+  else window.addEventListener("deviceorientation", onOrientation);
+  window.addEventListener("devicemotion", onMotion);
+  setInterval(() => { LIVE.rate = LIVE.evCount; LIVE.evCount = 0; }, 1000);
+  LIVE.on = true;
+  if (S.manual) { S.manual = false; syncSetup(); }
+  requestWakeLock();
+  if (S.locSource.startsWith("IIT Madras")) getGps(true);
+  setTimeout(() => {
+    if (!LIVE.gotEvent) toast("No motion sensor found on this device. Use Setup → Enter panel angles by hand.");
+    else if (!LIVE.absolute) toast("This browser gives tilt but no compass, so direction readings will be wrong. Try Chrome on Android.");
+  }, 2000);
+  updateStatus(); markDirty("all");
+}
+let wakeLock = null;
+async function requestWakeLock() {
+  try { if ("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen"); } catch (e) { /* optional */ }
+}
+document.addEventListener("visibilitychange", () => { if (LIVE.on && document.visibilityState === "visible") requestWakeLock(); });
+
+function getGps(quiet) {
+  if (!("geolocation" in navigator)) { if (!quiet) toast("Location is not available in this browser."); return; }
+  navigator.geolocation.getCurrentPosition(pos => {
+    S.lat = +pos.coords.latitude.toFixed(4); S.lon = +pos.coords.longitude.toFixed(4); S.locSource = "GPS ±" + Math.round(pos.coords.accuracy) + " m";
+    LIVE.gps = { lat: pos.coords.latitude, lon: pos.coords.longitude, acc: pos.coords.accuracy };
+    syncSetup(); rebuildLocation(); save(); markDirty("all"); toast("Location set from GPS.");
+  }, err => { if (!quiet || err.code !== 1) toast("Could not get location: " + err.message + ". Enter it in Setup."); },
+  { enableHighAccuracy: true, timeout: 15000, maximumAge: 600000 });
+}
+
+async function toggleCamera() {
+  const v = $("video");
+  if (v.srcObject) { v.srcObject.getTracks().forEach(t => t.stop()); v.srcObject = null; v.hidden = true; $("finderMsg").hidden = false; $("btnCam").textContent = "Camera on"; return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+    v.srcObject = stream; v.hidden = false; $("finderMsg").hidden = true; $("btnCam").textContent = "Camera off";
+  } catch (e) { toast("Camera unavailable: " + e.message + ". The crosshair still works."); }
+}
+
+/* ---------- rendering ---------- */
+let C = {};
+function readTokens() {
+  const cs = getComputedStyle(document.documentElement), g = n => cs.getPropertyValue(n).trim();
+  C = { bg: g("--bg"), surface: g("--surface"), surface2: g("--surface-2"), fg: g("--fg"), muted: g("--muted"), line: g("--line"),
+        accent: g("--accent"), good: g("--good"), warn: g("--warn"), bad: g("--bad"), lo: g("--heat-lo"), hi: g("--heat-hi"),
+        skyHi: g("--sky-hi"), skyLo: g("--sky-lo"), obstacle: g("--obstacle"), mono: g("--font-mono") };
+  M.heatImg = null;
+}
+const hex = h => { h = h.replace("#", ""); if (h.length === 3) h = h.split("").map(x => x + x).join(""); return [0, 2, 4].map(i => parseInt(h.substr(i, 2), 16)); };
+const mix = (a, b, t) => { const A = hex(a), B = hex(b); return `rgb(${A.map((v, i) => Math.round(v + (B[i] - v) * t)).join(",")})`; };
+const BANDS = [[0.98, "≥98%"], [0.95, "95–98"], [0.90, "90–95"], [0.80, "80–90"], [0.70, "70–80"], [0, "<70"]];
+const bandColor = i => mix(C.lo, C.hi, 1 - i / (BANDS.length - 1) * 0.92);
+
+function fitCanvas(cv, aspect) {
+  const dpr = Math.min(window.devicePixelRatio || 1, 3), w = cv.clientWidth || cv.parentElement.clientWidth;
+  const h = Math.round(w * aspect);
+  if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); cv.style.height = h + "px"; }
+  const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, w, h };
+}
+
+const POLAR_MAX = 60;
+function drawPolar() {
+  const cv = $("polar"), { ctx, w } = fitCanvas(cv, 1);
+  const cx = w / 2, cy = w / 2, Rr = w / 2 - 26;
+  ctx.clearRect(0, 0, w, w);
+  // heat bands, rendered once per location/theme into an offscreen image
+  const px = Math.round(Rr * 2 * Math.min(devicePixelRatio || 1, 2));
+  if (!M.heatImg || M.heatImg.width !== px) {
+    const off = document.createElement("canvas"); off.width = off.height = px;
+    const o = off.getContext("2d"), img = o.createImageData(px, px), cols = BANDS.map((_, i) => hex(bandColor(i).replace(/rgb\(|\)/g, "").split(",").map(x => (+x).toString(16).padStart(2, "0")).join("")));
+    for (let y = 0; y < px; y++) for (let x = 0; x < px; x++) {
+      const dx = (x + 0.5) / px * 2 - 1, dy = (y + 0.5) / px * 2 - 1, r = Math.hypot(dx, dy);
+      if (r > 1) continue;
+      const yv = heatYield(r * POLAR_MAX, Math.atan2(dx, -dy) * R2D);
+      let b = BANDS.findIndex(([th]) => yv >= th); if (b < 0) b = BANDS.length - 1;
+      const k = (y * px + x) * 4; img.data[k] = cols[b][0]; img.data[k + 1] = cols[b][1]; img.data[k + 2] = cols[b][2]; img.data[k + 3] = 255;
+    }
+    o.putImageData(img, 0, 0); M.heatImg = off;
+  }
+  ctx.drawImage(M.heatImg, cx - Rr, cy - Rr, Rr * 2, Rr * 2);
+  // grid: tilt rings and compass spokes
+  ctx.strokeStyle = C.fg; ctx.globalAlpha = 0.22; ctx.lineWidth = 1;
+  for (const t of [15, 30, 45, 60]) { ctx.beginPath(); ctx.arc(cx, cy, Rr * t / POLAR_MAX, 0, 2 * Math.PI); ctx.stroke(); }
+  for (let a = 0; a < 360; a += 45) { const r = a * D2R; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Rr * Math.sin(r), cy - Rr * Math.cos(r)); ctx.stroke(); }
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = C.muted; ctx.font = `500 11px ${C.mono}`; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+  for (const t of [15, 30, 45, 60]) ctx.fillText(t + "°", cx + 3, cy - Rr * t / POLAR_MAX + 8);
+  ctx.fillStyle = C.fg; ctx.font = `600 13px ${C.mono}`; ctx.textAlign = "center";
+  [["N", 0], ["E", 90], ["S", 180], ["W", 270]].forEach(([l, a]) => { const r = a * D2R; ctx.fillText(l, cx + (Rr + 14) * Math.sin(r), cy - (Rr + 14) * Math.cos(r)); });
+  const P = (tilt, az) => { const r = Math.min(tilt, POLAR_MAX) / POLAR_MAX * Rr, a = az * D2R; return [cx + r * Math.sin(a), cy - r * Math.cos(a)]; };
+  // optimum marker
+  const [ox, oy] = P(M.opt.tilt, M.opt.az);
+  ctx.strokeStyle = C.fg; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(ox, oy, 9, 0, 2 * Math.PI); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(ox - 14, oy); ctx.lineTo(ox + 14, oy); ctx.moveTo(ox, oy - 14); ctx.lineTo(ox, oy + 14); ctx.stroke();
+  // trail + current
+  const p = currentPanel();
+  if (p) {
+    if (!S.manual && LIVE.trail.length > 1) {
+      ctx.strokeStyle = C.accent; ctx.globalAlpha = 0.45; ctx.lineWidth = 2; ctx.beginPath();
+      LIVE.trail.forEach(([t, a], i) => { const [x, y] = P(t, a); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.stroke(); ctx.globalAlpha = 1;
+    }
+    const [x, y] = P(p.tilt, p.az);
+    ctx.fillStyle = C.accent; ctx.strokeStyle = C.surface; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(x, y, 9, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+  }
+  // legend (once)
+  const lg = $("polarLegend");
+  if (!lg.dataset.done || lg.dataset.theme !== C.hi) {
+    lg.innerHTML = BANDS.map(([, l], i) => `<span><i class="sw" style="background:${bandColor(i)}"></i>${l}</span>`).join("") +
+      `<span><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M0 8h16M8 0v16" stroke="currentColor" stroke-width="1.6"/></svg>Best</span>` +
+      `<span><i class="sw" style="background:${C.accent};border-radius:50%;width:12px;height:12px"></i>Your panel</span>`;
+    lg.dataset.done = "1"; lg.dataset.theme = C.hi;
+  }
+}
+
+function updateAlignText() {
+  const p = currentPanel(), o = M.opt;
+  $("tiltTarget").textContent = `best ${fmt(o.tilt, 0)}°`;
+  $("azTarget").textContent = `best ${fmt(o.az, 0)}° ${cardinal(o.az)}`;
+  const bar = $("tiltBar"), pos = t => clamp(t / 60, 0, 1) * 100 + "%";
+  $("tiltTgt").style.left = pos(o.tilt);
+  $("tiltTol").style.left = pos(o.tilt - 3); $("tiltTol").style.width = (6 / 60 * 100) + "%";
+  if (!p) { $("tiltCur").hidden = true; return; }
+  $("tiltCur").hidden = false; $("tiltCur").style.left = pos(p.tilt);
+  $("tiltVal").innerHTML = `${fmt(p.tilt, 1)}<small>°</small>`;
+  $("azVal").innerHTML = p.tilt < 2 ? `flat<small></small>` : `${fmt(p.az, 0)}<small>° ${cardinal(p.az)}</small>`;
+  const dT = o.tilt - p.tilt;
+  $("tiltAdvice").innerHTML = Math.abs(dT) < 2 ? `<span class="state-good">Tilt is right</span>`
+    : `<span class="state-warn">${dT > 0 ? "Increase" : "Reduce"} tilt by ${fmt(Math.abs(dT), 1)}°</span>`;
+  const dA = wrap180(o.az - p.az);
+  $("azAdvice").innerHTML = p.tilt < 4 ? `<span style="color:var(--muted)">At this low tilt, direction makes little difference</span>`
+    : Math.abs(dA) < 5 ? `<span class="state-good">Direction is right</span>`
+    : `<span class="state-warn">Turn ${fmt(Math.abs(dA), 0)}° ${dA > 0 ? "clockwise" : "anticlockwise"} (seen from above) toward ${cardinal(o.az)}</span>`;
+  const y = heatYieldExact(p);
+  const cls = y >= 0.97 ? "state-good" : y >= 0.9 ? "state-warn" : "state-bad";
+  $("yieldBig").className = "big " + cls;
+  $("yieldBig").innerHTML = `${fmt(y * 100, 1)}<small>%</small>`;
+  const lostKwh = S.kwp * M.ideal * (1 - y) * S.pr * WEATHER;
+  $("yieldNote").textContent = y >= 0.97 ? "Well aligned" : y >= 0.9 ? "Could be better" : "Poorly aligned";
+  $("yieldLoss").textContent = `−${fmt((1 - y) * 100, 1)}% · ≈ ${fmt(lostKwh, 0)} kWh / ₹${fmt(lostKwh * S.tariff, 0)} lost per year`;
+  const on = Math.abs(dT) < 2 && (Math.abs(dA) < 5 || p.tilt < 4);
+  $("onTarget").hidden = !on;
+  if (on && !LIVE.onTarget && !S.manual && navigator.vibrate) navigator.vibrate([60, 40, 60]);
+  LIVE.onTarget = on;
+}
+function heatYieldExact(p) { return poa(p.tilt, p.az) / M.ideal; }
+
+/* tilt over the last 20 s, with the best tilt as a dashed reference */
+function drawSpark() {
+  const cv = $("spark"), { ctx, w, h } = fitCanvas(cv, 0.32);
+  const L = 34, Rm = 8, T = 8, B = 18, pw = w - L - Rm, ph = h - T - B;
+  ctx.clearRect(0, 0, w, h);
+  const hs = LIVE.hist, now = performance.now();
+  let lo = M.opt.tilt, hi = M.opt.tilt;
+  hs.forEach(([, t]) => { lo = Math.min(lo, t); hi = Math.max(hi, t); });
+  lo = Math.max(0, Math.floor((lo - 3) / 5) * 5); hi = Math.ceil((hi + 3) / 5) * 5;
+  const X = ts => L + pw - (now - ts) / 20000 * pw, Y = v => T + ph - (v - lo) / (hi - lo) * ph;
+  ctx.strokeStyle = C.line; ctx.lineWidth = 1; ctx.fillStyle = C.muted; ctx.font = `500 10px ${C.mono}`;
+  ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  const step = (hi - lo) > 30 ? 15 : 5;
+  for (let v = lo; v <= hi; v += step) { ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); ctx.stroke(); ctx.fillText(v + "°", L - 4, Y(v)); }
+  ctx.textAlign = "center"; ctx.textBaseline = "top";
+  for (let s = 0; s <= 20; s += 5) ctx.fillText(s ? `−${s}s` : "now", L + pw - s / 20 * pw, T + ph + 4);
+  ctx.setLineDash([4, 4]); ctx.strokeStyle = C.fg; ctx.beginPath(); ctx.moveTo(L, Y(M.opt.tilt)); ctx.lineTo(L + pw, Y(M.opt.tilt)); ctx.stroke(); ctx.setLineDash([]);
+  if (hs.length > 1) {
+    ctx.strokeStyle = C.accent; ctx.lineWidth = 2; ctx.beginPath();
+    hs.forEach(([ts, v], i) => i ? ctx.lineTo(X(ts), Y(v)) : ctx.moveTo(X(ts), Y(v))); ctx.stroke();
+    const [ts, v] = hs[hs.length - 1]; ctx.fillStyle = C.accent; ctx.beginPath(); ctx.arc(X(ts), Y(v), 3.5, 0, 2 * Math.PI); ctx.fill();
+  } else {
+    ctx.fillStyle = C.surface; ctx.fillRect(L + 1, T + ph * 0.15, pw - 2, 18);
+    ctx.fillStyle = C.muted; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(LIVE.on ? "Waiting for sensor data…" : "Start the sensors to see live data", L + pw / 2, T + ph * 0.15 + 9);
+  }
+}
+function updateRaw() {
+  const a = LIVE.acc, e = LIVE.euler, g = LIVE.gps;
+  $("rawAcc").textContent = a ? a.map(v => fmt(v, 2)).join(", ") + " m/s²" : "–";
+  $("rawAccTilt").textContent = a ? fmt(Math.acos(clamp(Math.abs(a[2]) / Math.hypot(...a), 0, 1)) * R2D, 1) + "°" : "–";
+  $("rawHead").textContent = e && LIVE.absolute ? `${fmt(wrap360(360 - e[0] + S.decl), 0)}° ${cardinal(360 - e[0] + S.decl)}` : (e ? "no compass" : "–");
+  $("rawEuler").textContent = e ? e.map(v => fmt(v, 1)).join(", ") + "°" : "–";
+  $("rawGps").textContent = g ? `${fmt(g.lat, 5)}, ${fmt(g.lon, 5)} ±${fmt(g.acc, 0)} m` : "–";
+  $("rateText").textContent = LIVE.on ? `${LIVE.rate} readings/s` : "";
+}
+
+/* sun-path diagram: x = azimuth (equator-facing direction in the middle), y = elevation */
+function drawSunpath() {
+  const cv = $("sunpath"), { ctx, w, h } = fitCanvas(cv, 0.6);
+  const L = 34, Rm = 10, T = 22, B = 26, pw = w - L - Rm, ph = h - T - B;
+  const centre = S.lat >= 0 ? 180 : 0;
+  const X = az => L + (wrap360(az - centre + 180) / 360) * pw, Y = el => T + ph - (clamp(el, 0, 90) / 90) * ph;
+  ctx.clearRect(0, 0, w, h);
+  const grad = ctx.createLinearGradient(0, T, 0, T + ph); grad.addColorStop(0, C.skyHi); grad.addColorStop(1, C.skyLo);
+  ctx.fillStyle = grad; ctx.fillRect(L, T, pw, ph);
+  // grid
+  ctx.strokeStyle = C.line; ctx.lineWidth = 1; ctx.fillStyle = C.muted; ctx.font = `500 10px ${C.mono}`;
+  ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  for (let e = 0; e <= 90; e += 15) { ctx.beginPath(); ctx.moveTo(L, Y(e)); ctx.lineTo(L + pw, Y(e)); ctx.stroke(); ctx.fillText(e + "°", L - 5, Y(e)); }
+  ctx.textAlign = "center"; ctx.textBaseline = "top";
+  for (let k = 0; k <= 8; k++) {
+    const az = wrap360(centre - 180 + k * 45), x = L + k / 8 * pw;
+    ctx.beginPath(); ctx.moveTo(x, T); ctx.lineTo(x, T + ph); ctx.stroke();
+    ctx.fillStyle = k % 2 ? C.muted : C.fg; ctx.fillText(cardinal(az), x, T + ph + 6);
+  }
+  // skyline polygon
+  ctx.beginPath(); ctx.moveTo(L, Y(0));
+  for (let x = 0; x <= pw; x += 2) { const az = centre - 180 + x / pw * 360; ctx.lineTo(L + x, Y(horizonAt(az))); }
+  ctx.lineTo(L + pw, Y(0)); ctx.closePath();
+  ctx.fillStyle = C.obstacle; ctx.globalAlpha = 0.75; ctx.fill(); ctx.globalAlpha = 1;
+  // unmeasured stretches marked along the bottom
+  ctx.fillStyle = C.warn;
+  for (let b = 0; b < NBINS; b++) if (!S.recorded[b]) { const x0 = X(b * BIN - BIN / 2); ctx.fillRect(x0, T + ph - 3, pw / NBINS, 3); }
+  // sun paths on the 21st of each month (pairs overlap: 7 distinct curves)
+  const phi = S.lat * D2R;
+  // only the solstices and equinox are labelled; the others sit too close together on a phone screen
+  const dates = [[355, "Dec 21"], [21, ""], [52, ""], [80, "Mar·Sep 21"], [111, ""], [141, ""], [172, "Jun 21"]];
+  const hourPts = {};
+  ctx.lineWidth = 2.2;
+  dates.forEach(([n, label]) => {
+    const decl = 23.45 * D2R * Math.sin(2 * Math.PI * (284 + n) / 365);
+    let prev = null, peak = null;
+    for (let t = 4; t <= 20; t += 1 / 12) {
+      const s = sunVector(phi, decl, t), el = Math.asin(clamp(s.U, -1, 1)) * R2D, az = wrap360(Math.atan2(s.E, s.N) * R2D);
+      const cur = el > 0 ? { x: X(az), y: Y(el), blocked: el <= horizonAt(az) } : null;
+      if (cur && prev && Math.abs(cur.x - prev.x) < pw / 2) {
+        ctx.strokeStyle = cur.blocked ? C.bad : C.accent;
+        ctx.beginPath(); ctx.moveTo(prev.x, prev.y); ctx.lineTo(cur.x, cur.y); ctx.stroke();
+      }
+      if (cur && (!peak || cur.y < peak.y)) peak = cur;
+      const hr = Math.round(t * 12) / 12;
+      if (cur && Math.abs(hr - Math.round(hr)) < 1e-6) (hourPts[Math.round(hr)] ||= []).push(cur);
+      prev = cur;
+    }
+    if (peak && label) {
+      ctx.font = `600 10px ${C.mono}`; ctx.textBaseline = "bottom";
+      const tw = ctx.measureText(label).width, lx = clamp(peak.x - tw / 2, L + 2, L + pw - tw - 2), ly = Math.max(T + 12, peak.y - 3);
+      ctx.fillStyle = C.surface; ctx.globalAlpha = 0.8; ctx.fillRect(lx - 2, ly - 11, tw + 4, 12); ctx.globalAlpha = 1;
+      ctx.fillStyle = C.fg; ctx.textAlign = "left"; ctx.fillText(label, lx, ly);
+    }
+  });
+  // hour lines (solar time)
+  ctx.setLineDash([2, 3]); ctx.lineWidth = 1; ctx.strokeStyle = C.muted;
+  ctx.font = `500 10px ${C.mono}`; ctx.textAlign = "center"; ctx.textBaseline = "bottom"; ctx.fillStyle = C.muted;
+  Object.entries(hourPts).forEach(([hr, pts]) => {
+    pts.sort((a, b) => a.y - b.y);
+    if (pts.length < 2) return;
+    let ok = true; for (let i = 1; i < pts.length; i++) if (Math.abs(pts[i].x - pts[i - 1].x) > pw / 3) ok = false;
+    if (!ok) return;
+    ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke();
+    if (+hr % 2 === 0) ctx.fillText(hr + "h", pts[0].x, pts[0].y - 3);
+  });
+  ctx.setLineDash([]);
+  // live pointer
+  if (LIVE.point && LIVE.tab === "shade") {
+    const x = X(LIVE.point.az), y = Y(Math.max(0, LIVE.point.el));
+    ctx.strokeStyle = LIVE.tracing ? C.bad : C.fg; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(x, y, 7, 0, 2 * Math.PI); ctx.moveTo(x - 12, y); ctx.lineTo(x + 12, y); ctx.moveTo(x, y - 12); ctx.lineTo(x, y + 12); ctx.stroke();
+  }
+  ctx.strokeStyle = C.line; ctx.strokeRect(L + 0.5, T + 0.5, pw - 1, ph - 1);
+  drawSunpath.geom = { L, T, pw, ph, centre };
+}
+
+function drawMonthly() {
+  const cv = $("monthly"), { ctx, w, h } = fitCanvas(cv, 0.5);
+  const L = 30, Rm = 6, T = 22, B = 22, pw = w - L - Rm, ph = h - T - B;
+  ctx.clearRect(0, 0, w, h);
+  const maxH = 14, Y = v => T + ph - v / maxH * ph;
+  ctx.strokeStyle = C.line; ctx.fillStyle = C.muted; ctx.font = `500 10px ${C.mono}`; ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  for (let v = 0; v <= maxH; v += 4) { ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(L + pw, Y(v)); ctx.stroke(); ctx.fillText(v + "h", L - 4, Y(v)); }
+  const gw = pw / 12, bw = Math.min(gw * 0.62, 30);
+  for (let m = 0; m < 12; m++) {
+    const x = L + m * gw + (gw - bw) / 2;
+    ctx.fillStyle = C.surface2; ctx.fillRect(x, Y(R.hOpen[m]), bw, T + ph - Y(R.hOpen[m]));
+    ctx.fillStyle = C.accent; ctx.fillRect(x + 3, Y(R.hHere[m]), bw - 6, T + ph - Y(R.hHere[m]));
+    ctx.fillStyle = C.muted; ctx.textAlign = "center"; ctx.textBaseline = "top"; ctx.fillText(MONTHS[m][0], x + bw / 2, T + ph + 6);
+    const loss = R.monthLoss[m];
+    if (loss > 0.005) { ctx.fillStyle = C.bad; ctx.textBaseline = "bottom"; ctx.fillText(String(Math.round(loss * 100)), x + bw / 2, Y(R.hOpen[m]) - 3); }
+  }
+}
+
+function updateShadeText() {
+  const cov = S.recorded.reduce((a, b) => a + b, 0) * BIN;
+  $("coverText").textContent = `${cov}° of 360°`;
+  $("coverFill").style.width = (cov / 360 * 100) + "%";
+  $("spLat").textContent = `${fmt(Math.abs(S.lat), 2)}°${S.lat >= 0 ? "N" : "S"} · solar time`;
+  const yrOpen = R.hOpen.reduce((a, v, m) => a + v * M.samples.days[m], 0) / 365, yrHere = R.hHere.reduce((a, v, m) => a + v * M.samples.days[m], 0) / 365;
+  const l = R.shadeLoss;
+  $("shLoss").innerHTML = `<span class="${l < 0.03 ? "state-good" : l < 0.1 ? "state-warn" : "state-bad"}">${fmt(l * 100, 1)}<small>%</small></span>`;
+  $("shOpen").innerHTML = `${fmt(yrOpen, 1)}<small> h/day</small>`;
+  $("shHere").innerHTML = `${fmt(yrHere, 1)}<small> h/day</small>`;
+}
+function updateShadeLive() {
+  const p = LIVE.point;
+  $("ptAz").textContent = p ? `${fmt(p.az, 0)}° ${cardinal(p.az)}` : "–°";
+  $("ptEl").textContent = p ? `${fmt(p.el, 1)}°` : "–°";
+}
+
+function updateReport() {
+  const r = R, p = r.panel;
+  const pct = v => fmt(v * 100, 1) + "%";
+  if (!p) {
+    $("netBig").innerHTML = `–<small>%</small>`; $("netNote").textContent = "Measure a panel on the Align tab first";
+  } else {
+    const cls = r.net >= 0.95 ? "state-good" : r.net >= 0.85 ? "state-warn" : "state-bad";
+    $("netBig").className = "big " + cls; $("netBig").innerHTML = `${fmt(r.net * 100, 1)}<small>%</small>`;
+    $("netNote").textContent = r.net >= 0.95 ? "Good site, little to gain" : r.net >= 0.85 ? "Worth fixing" : "Large losses: act on the steps below";
+  }
+  const net = p ? r.net : 0, orL = p ? 1 - r.orientYield : 0, shL = p ? r.orientYield - r.net : 0;
+  $("wfNet").style.width = net * 100 + "%"; $("wfOr").style.width = orL * 100 + "%"; $("wfSh").style.width = shL * 100 + "%";
+  $("lgNet").textContent = p ? pct(net) : "–"; $("lgOr").textContent = p ? pct(orL) : "–"; $("lgSh").textContent = p ? pct(shL) : "–";
+  $("wfBar").setAttribute("aria-label", p ? `Delivered ${pct(net)}, alignment loss ${pct(orL)}, shading loss ${pct(shL)}` : "No panel measured yet");
+  const lost = p ? r.eIdeal - r.eNet : NaN;
+  $("rpE").innerHTML = p ? `${fmt(r.eNet, 0)}<small> kWh</small>` : "–";
+  $("rpLost").innerHTML = p ? `${fmt(lost, 0)}<small> kWh</small>` : "–";
+  $("rpRs").innerHTML = p ? `₹${fmt(lost * S.tariff, 0)}` : "–";
+
+  // recommendations
+  const recs = [];
+  if (!p) recs.push("Go to <b>Align</b> and place the phone flat on the panel to measure it.");
+  else {
+    if (orL > 0.02) recs.push(`Re-angle the panel to <b>${fmt(M.opt.tilt, 0)}° tilt facing ${fmt(M.opt.az, 0)}° ${cardinal(M.opt.az)}</b>. That recovers about <b>${fmt(r.eIdeal - r.eOpen, 0)} kWh (₹${fmt((r.eIdeal - r.eOpen) * S.tariff, 0)})</b> a year.`);
+    else recs.push(`Alignment is within ${pct(orL)} of ideal. No change needed.`);
+    if (p.tilt < 8) recs.push("Below about 10° of tilt, rain does not wash dust off the glass. A small yield trade-off for 10–15° usually pays back in less cleaning.");
+  }
+  const cov = S.recorded.reduce((a, b) => a + b, 0) * BIN;
+  if (cov < 270) recs.push(`Only ${cov}° of the skyline has been measured. Finish the sweep on the <b>Shade</b> tab so the shading figure is complete.`);
+  if (r.shadeLoss > 0.02) {
+    // which direction costs the most beam energy
+    let best = 0, bi = 0;
+    for (let b = 0; b < NBINS; b++) { const s = r.lostByBin[(b - 1 + NBINS) % NBINS] + r.lostByBin[b] + r.lostByBin[(b + 1) % NBINS]; if (s > best) { best = s; bi = b; } }
+    const worst = r.monthLoss.map((v, m) => [v, m]).sort((a, b) => b[0] - a[0]).slice(0, 3).filter(x => x[0] > 0.01).map(x => MONTHS[x[1]]);
+    recs.push(`Shading costs <b>${pct(r.shadeLoss)}</b>. The main obstruction is toward <b>${cardinal(bi * BIN)} (${bi * BIN}°)</b>${worst.length ? `, worst in ${worst.join(", ")}` : ""}. Trimming or relocating away from it helps most.`);
+    if (r.shadeLoss > 0.05) recs.push("With partial shade, one shaded cell can pull down a whole string. Microinverters or panel optimisers keep the unshaded panels producing.");
+    if (!M.shadeOpt) M.shadeOpt = searchOptimum(true, 3, 10);
+    if (p && M.shadeOpt && M.shadeOpt.p / poa(p.tilt, p.az, { shade: true }) > 1.01 && (Math.abs(M.shadeOpt.tilt - M.opt.tilt) > 2 || Math.abs(wrap180(M.shadeOpt.az - M.opt.az)) > 5))
+      recs.push(`With this skyline, the best orientation shifts to <b>${fmt(M.shadeOpt.tilt, 0)}° tilt, ${fmt(M.shadeOpt.az, 0)}° ${cardinal(M.shadeOpt.az)}</b>.`);
+  } else if (cov >= 270) recs.push(`Shading is minor (${pct(r.shadeLoss)}). This spot works well.`);
+  $("recs").innerHTML = recs.map(x => `<li>${x}</li>`).join("");
+
+  const rows = [
+    ["Location", `${fmt(S.lat, 4)}, ${fmt(S.lon, 4)}`], ["Location source", S.locSource],
+    ["Panel tilt / direction", p ? `${fmt(p.tilt, 1)}° / ${fmt(p.az, 0)}° ${cardinal(p.az)}` : "–"],
+    ["Best tilt / direction", `${fmt(M.opt.tilt, 1)}° / ${fmt(M.opt.az, 0)}° ${cardinal(M.opt.az)}`],
+    ["Ideal irradiation", `${fmt(M.ideal * WEATHER, 0)} kWh/m²/yr`],
+    ["Skyline measured", `${cov}° of 360°`], ["Sky-view factor", fmt(M.svf, 3)],
+    ["System / PR / tariff", `${fmt(S.kwp, 1)} kWp / ${fmt(S.pr, 2)} / ₹${fmt(S.tariff, 1)}`],
+    ["Ideal yield", `${fmt(r.eIdeal, 0)} kWh/yr`],
+  ];
+  $("detail").innerHTML = rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join("");
+}
+
+/* ---------- frame loop ---------- */
+const dirty = new Set(["all"]);
+function markDirty(...k) { k.forEach(x => dirty.add(x)); }
+let lastText = 0;
+function frame(ts) {
+  if (dirty.size) {
+    const all = dirty.has("all");
+    if (all || dirty.has("shade") || dirty.has("report") || dirty.has("align")) computeResults();
+    const tab = LIVE.tab;
+    if (tab === "align" && (all || dirty.has("align"))) {
+      drawPolar(); drawSpark();
+      if (ts - lastText > 120 || all || LIVE.frozen || S.manual) { updateAlignText(); updateRaw(); lastText = ts; } else dirty.add("alignText");
+    }
+    if (tab === "align" && dirty.has("alignText") && ts - lastText > 120) { updateAlignText(); updateRaw(); lastText = ts; dirty.delete("alignText"); }
+    if (tab === "shade" && (all || dirty.has("shade") || dirty.has("shadeLive"))) {
+      drawSunpath(); updateShadeLive();
+      if (all || dirty.has("shade")) { drawMonthly(); updateShadeText(); }
+    }
+    if (tab === "report" && (all || dirty.has("report") || dirty.has("align"))) updateReport();
+    const keepText = dirty.has("alignText");
+    dirty.clear(); if (keepText) dirty.add("alignText");
+  }
+  requestAnimationFrame(frame);
+}
+
+/* ---------- UI wiring ---------- */
+function setTab(t) {
+  LIVE.tab = t;
+  document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === t)));
+  document.querySelectorAll(".view").forEach(v => v.hidden = v.dataset.view !== t);
+  if (t !== "shade" && LIVE.tracing) toggleTrace();
+  window.scrollTo(0, 0);
+  updateStatus(); markDirty("all");
+}
+function updateStatus() {
+  const chip = $("sensorChip"); chip.className = "chip";
+  let txt = "Sensors off";
+  if (S.manual) { txt = "Manual angles"; chip.classList.add("warn"); }
+  else if (LIVE.on && LIVE.frozen && LIVE.tab === "align") { txt = "Reading frozen"; chip.classList.add("frozen"); }
+  else if (LIVE.on && LIVE.gotEvent && !LIVE.absolute) { txt = "No compass"; chip.classList.add("warn"); }
+  else if (LIVE.on) { txt = "Live"; chip.classList.add("live"); }
+  $("sensorText").textContent = txt;
+  $("startAlign").hidden = LIVE.on || S.manual;
+  $("locText").textContent = `${fmt(Math.abs(S.lat), 2)}°${S.lat >= 0 ? "N" : "S"} ${fmt(Math.abs(S.lon), 2)}°${S.lon >= 0 ? "E" : "W"}`;
+  $("btnFreeze").textContent = LIVE.frozen ? "Resume live reading" : "Freeze reading";
+  $("btnFreeze").disabled = S.manual || !LIVE.on;
+}
+function toggleTrace() {
+  if (!LIVE.on && !LIVE.tracing) { toast("Start the sensors first (Align tab), or drag on the chart to sketch the skyline."); return; }
+  LIVE.tracing = !LIVE.tracing; LIVE.lastBin = null;
+  $("btnTrace").textContent = LIVE.tracing ? "Stop tracing" : "Trace skyline";
+  $("btnTrace").className = "btn " + (LIVE.tracing ? "rec" : "primary");
+  $("recTag").hidden = !LIVE.tracing; $("finder").classList.toggle("rec", LIVE.tracing);
+  if (LIVE.tracing && navigator.vibrate) navigator.vibrate(40);
+}
+let toastTimer;
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => t.hidden = true, 4200); }
+
+function syncSetup() {
+  $("inLat").value = S.lat; $("inLon").value = S.lon; $("inKwp").value = S.kwp; $("inTariff").value = S.tariff;
+  $("inPr").value = S.pr; $("inAlb").value = String(S.albedo); $("inDecl").value = S.decl;
+  $("inManual").checked = S.manual; $("manualBox").hidden = !S.manual;
+  $("inMTilt").value = S.mTilt; $("inMAz").value = S.mAz;
+  $("mTiltV").textContent = S.mTilt + "°"; $("mAzV").textContent = `${S.mAz}° ${cardinal(S.mAz)}`;
+  updateStatus();
+}
+function bindNumber(id, key, lo, hi, after) {
+  $(id).addEventListener("change", e => {
+    const v = parseFloat(e.target.value);
+    if (!Number.isFinite(v) || v < lo || v > hi) { toast(`Enter a value between ${lo} and ${hi}.`); e.target.value = S[key]; return; }
+    S[key] = v; save(); if (after) after(); markDirty("all");
+  });
+}
+
+function sketchSkyline(e) {
+  const g = drawSunpath.geom; if (!g) return;
+  const rect = $("sunpath").getBoundingClientRect(), x = e.clientX - rect.left, y = e.clientY - rect.top;
+  if (x < g.L || x > g.L + g.pw) return;
+  const az = wrap360(g.centre - 180 + (x - g.L) / g.pw * 360), el = clamp((g.T + g.ph - y) / g.ph * 90, 0, 90);
+  const bin = Math.round(az / BIN) % NBINS;
+  S.horizon[bin] = el; S.recorded[bin] = 1;
+  scheduleShading(); markDirty("shadeLive");
+}
+
+function exampleSkyline() {
+  // building to the east, tree to the south-west, water tank to the north
+  S.horizon.fill(2); S.recorded.fill(1);
+  const bump = (c, half, top, shape) => { for (let b = 0; b < NBINS; b++) { const d = Math.abs(wrap180(b * BIN - c)); if (d <= half) S.horizon[b] = Math.max(S.horizon[b], shape === "box" ? top : top * Math.cos(d / half * Math.PI / 2) ** 0.6); } };
+  bump(95, 22, 24, "box"); bump(225, 28, 38, "tree"); bump(0, 12, 14, "box"); bump(160, 8, 9, "tree");
+  rebuildShading(); save();
+}
+
+function csv() {
+  const r = R, p = r.panel, lines = [["field", "value"]];
+  const add = (k, v) => lines.push([k, v]);
+  add("generated", new Date().toISOString()); add("latitude", S.lat); add("longitude", S.lon);
+  add("panel_tilt_deg", p ? p.tilt.toFixed(1) : ""); add("panel_azimuth_deg", p ? p.az.toFixed(1) : "");
+  add("best_tilt_deg", M.opt.tilt); add("best_azimuth_deg", M.opt.az);
+  add("orientation_yield_pct", p ? (r.orientYield * 100).toFixed(2) : ""); add("shading_loss_pct", (r.shadeLoss * 100).toFixed(2));
+  add("net_yield_pct", p ? (r.net * 100).toFixed(2) : ""); add("system_kwp", S.kwp); add("expected_kwh_per_year", p ? r.eNet.toFixed(0) : "");
+  add("ideal_kwh_per_year", r.eIdeal.toFixed(0)); add("tariff_rs_per_kwh", S.tariff);
+  lines.push([]); lines.push(["azimuth_deg", "obstacle_elevation_deg", "measured"]);
+  for (let b = 0; b < NBINS; b++) lines.push([b * BIN, S.horizon[b].toFixed(1), S.recorded[b]]);
+  lines.push([]); lines.push(["month", "direct_sun_open_h_per_day", "direct_sun_here_h_per_day", "shading_loss_pct"]);
+  for (let m = 0; m < 12; m++) lines.push([MONTHS[m], r.hOpen[m].toFixed(2), r.hHere[m].toFixed(2), (r.monthLoss[m] * 100).toFixed(1)]);
+  const blob = new Blob([lines.map(l => l.join(",")).join("\n")], { type: "text/csv" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "solar-site-survey.csv";
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+function summaryText() {
+  const r = R, p = r.panel;
+  return [`Solar Site Survey, ${fmt(S.lat, 4)}, ${fmt(S.lon, 4)}`,
+    p ? `Panel: ${fmt(p.tilt, 1)}° tilt facing ${fmt(p.az, 0)}° ${cardinal(p.az)} (best ${fmt(M.opt.tilt, 0)}° / ${fmt(M.opt.az, 0)}° ${cardinal(M.opt.az)})` : "Panel: not measured",
+    p ? `Alignment yield ${fmt(r.orientYield * 100, 1)}%, shading loss ${fmt(r.shadeLoss * 100, 1)}%, net ${fmt(r.net * 100, 1)}% of ideal` : `Shading loss ${fmt(r.shadeLoss * 100, 1)}%`,
+    p ? `${fmt(S.kwp, 1)} kWp: about ${fmt(r.eNet, 0)} kWh/yr, ${fmt(r.eIdeal - r.eNet, 0)} kWh (₹${fmt((r.eIdeal - r.eNet) * S.tariff, 0)}) below ideal` : ""].filter(Boolean).join("\n");
+}
+
+function init() {
+  load(); readTokens(); syncSetup(); rebuildLocation();
+  document.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));
+  $("btnStart").addEventListener("click", startSensors);
+  $("btnFreeze").addEventListener("click", () => { LIVE.frozen = !LIVE.frozen; if (LIVE.frozen) save(); updateStatus(); markDirty("align"); toast(LIVE.frozen ? "Reading frozen. You can pick the phone up now." : "Live reading resumed."); });
+  $("locChip").addEventListener("click", () => setTab("setup"));
+  $("btnTrace").addEventListener("click", toggleTrace);
+  $("btnCam").addEventListener("click", toggleCamera);
+  $("btnExample").addEventListener("click", () => { exampleSkyline(); toast("Example skyline loaded: building E, tree SW, tank N."); });
+  $("btnClear").addEventListener("click", () => { S.horizon.fill(0); S.recorded.fill(0); rebuildShading(); save(); toast("Skyline cleared."); });
+  $("btnGps").addEventListener("click", () => getGps(false));
+  $("btnCsv").addEventListener("click", csv);
+  $("btnCopy").addEventListener("click", () => {
+    const text = summaryText();
+    navigator.clipboard.writeText(text).then(() => toast("Summary copied."), () => toast("Copy blocked. Select the details table instead."));
+  });
+  const cv = $("sunpath");
+  cv.addEventListener("pointerdown", e => { cv.setPointerCapture(e.pointerId); sketchSkyline(e); });
+  cv.addEventListener("pointermove", e => { if (e.buttons) sketchSkyline(e); });
+
+  bindNumber("inLat", "lat", -66, 66, () => { S.locSource = "Entered by hand"; rebuildLocation(); updateStatus(); });
+  bindNumber("inLon", "lon", -180, 180, () => { S.locSource = "Entered by hand"; updateStatus(); });
+  bindNumber("inKwp", "kwp", 0.1, 1000); bindNumber("inTariff", "tariff", 0, 100); bindNumber("inPr", "pr", 0.5, 0.95);
+  bindNumber("inDecl", "decl", -30, 30);
+  $("inAlb").addEventListener("change", e => { S.albedo = parseFloat(e.target.value); save(); rebuildLocation(); markDirty("all"); });
+  $("inManual").addEventListener("change", e => { S.manual = e.target.checked; save(); syncSetup(); markDirty("all"); });
+  $("inMTilt").addEventListener("input", e => { S.mTilt = +e.target.value; $("mTiltV").textContent = S.mTilt + "°"; save(); markDirty("align"); });
+  $("inMAz").addEventListener("input", e => { S.mAz = +e.target.value; $("mAzV").textContent = `${S.mAz}° ${cardinal(S.mAz)}`; save(); markDirty("align"); });
+
+  const mq = window.matchMedia("(prefers-color-scheme: dark)");
+  (mq.addEventListener ? mq.addEventListener("change", () => { readTokens(); markDirty("all"); }) : mq.addListener(() => { readTokens(); markDirty("all"); }));
+  window.addEventListener("resize", () => { M.heatImg = null; markDirty("all"); });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => markDirty("all"));
+  requestAnimationFrame(frame);
+}
+init();
+</script>
+</body>
+</html>
