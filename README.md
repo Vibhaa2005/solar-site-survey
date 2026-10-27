@@ -29,4 +29,7 @@ Phone browsers only give sensor, GPS and camera access to pages served over **ht
 - Sun position from declination and hour angle, every 3rd day at 10-minute steps.
 - Clear-sky irradiance: Kasten–Young air mass, Meinel beam model, 10% diffuse.
 - Plane-of-array irradiance from the isotropic-sky model. Beam light counts only when the sun is above the measured skyline; diffuse is scaled by the sky-view factor.
+- One baseline everywhere: 100% = the open-sky optimum. The "best angle" is the best angle for this spot including the traced skyline. **Angle loss** = best angle − your panel (both with shade); **shade loss** = open-sky optimum − best angle. The two always add up to the total loss, so every tab shows the same numbers.
+- Measurement quality: tilt and direction are the mean of the last 5 s of raw readings, reported with their spread (standard deviation; circular SD for direction).
+- Payback = one-time fix cost (editable estimate in Setup) ÷ yearly saving.
 - kWh/yr = kWp × annual irradiation × performance ratio × 0.74 (cloud/haze factor calibrated to typical Indian yields of about 1,500 kWh/kWp). The percentages don't depend on this factor.
